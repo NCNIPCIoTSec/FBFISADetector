@@ -1,0 +1,62 @@
+{
+    "thumb": {
+        "bl-r-func-32": {
+            "bits_map": {
+                "s": [5, 6],
+                "imm10": [6, 16],
+                "j1": [18, 19],
+                "j2": [20, 21],
+                "imm11": [21, 32]
+            },
+            "expressions": [
+                ["b", "i1 = ~((j1 & ~s) | (~j1 & s))"],  
+                ["b", "i2 = ~((j2 & ~s) | (~j2 & s))"], 
+                ["c", "imm25 = s || i1 || i2 || imm10 || imm11 || 0"], 
+                ["e", "imm32 = LS(imm25, 7)"],  
+                ["a", "imm32"],  
+                ["d", "offset = imm32 + 4"]  
+            ]
+        }
+    },
+    "ppc32": {
+        "bx-r-func-32": {
+            "bits_map": {
+                "imm24": [6, 30],
+                "AA": [30, 31],
+                "LK": [31, 32]
+            },
+            "expressions": [
+                ["c", "imm26 = imm24 || 00"],  
+                ["e", "imm32 = LS(imm26, 6)"], 
+                ["a", "imm32"],  
+                ["d", "offset = imm32"] 
+            ]
+        }
+    },
+    "tricore": {
+        "call-r-func-32": {
+            "bits_map":{
+                "imm16": [0, 16],
+                "imm8": [16, 24]
+            },
+            "expressions": [
+                ["c", "imm24 = imm8 || imm16"],  
+                ["d", "imm25 = imm24 * 2"],
+                ["e", "imm32 = LS(imm25, 7)"],  
+                ["a", "imm32"],  
+                ["d", "offset = imm32"]  
+            ]
+        },
+        "call-r-func-16": {
+            "bits_map": {
+                "imm8": [0, 7]
+            },
+            "expressions": [
+                ["d", "imm9 = imm8 * 2"],
+                ["e", "imm32 = LS(imm9, 23)"],
+                ["a", "imm32"], 
+                ["d", "offset = imm32"]
+            ]
+        }
+    }
+}

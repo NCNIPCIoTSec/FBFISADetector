@@ -1,0 +1,7 @@
+/resources/tmp*
+/src/demo.py
+
+/.history/
+/.vscode/
+/.idea/
+/resources/data/
