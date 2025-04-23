@@ -16,6 +16,10 @@ PROCESSOR_ARCHITECTURES = {
     "AMR64": {
         "ARCH": cps.CS_ARCH_AARCH64,
         "MODES": [cps.CS_MODE_V9]
+    },
+    "TRICORE": {
+        "ARCH": cps.CS_ARCH_TRICORE,
+        "MODES": [cps.CS_MODE_TRICORE_180]
     }
 }
 
@@ -56,8 +60,8 @@ class BinaryBlock:
       - FUNC-1. 获取指令对关系：获取所有块内指令对；  
     '''
     arch = None
-    pairs_dict = {}
-    others_dict = {}
+    inner_pairs_dict = {}
+    instructions_info = {}
 
     def __init__(self, endian: str, binary: bytes, block_stack_pair: tuple):
         # 要求先初始化类信息
@@ -74,13 +78,13 @@ class BinaryBlock:
         self.other_pairs = dict()  # record pairs found by func-get_inner_block_pairs
     
     @classmethod
-    def load_configure_info(cls, arch: str, pairs_dict: dict, others_dict: dict):
+    def load_configure_info(cls, arch: str, inner_pairs_dict: dict, instructions_info: dict):
         """
         获取类的相关配置信息
         """
         cls.arch = arch.upper()
-        cls.pairs_dict = pairs_dict
-        cls.others_dict = others_dict
+        cls.inner_pairs_dict = inner_pairs_dict
+        cls.instructions_info = instructions_info
         # 其他参数
         cls.reverse_unit = 2  # 字节序反转，按多少字节反转
         cls.min_ins_length = 2  # 指令字最短的指令占多少字节长度
@@ -98,27 +102,52 @@ class BinaryBlock:
         """
         线性扫描逆向分析算法来分析“可能”为函数块
         """
+        
+        def instr_preprocess(instr: str) -> set[str]:
+            '''
+            添加一些预处理操作，处理call指令跳转和指令名称的问题
+            '''
+            instr_class = set()
+            # 获取指令信息
+            if instr.lower().endswith("-func"):
+                instr_class.add("*")
+            else:
+                all_descriptions: list[str] = self.instructions_info[instr].get("descriptions")
+                if all_descriptions is None:
+                    print(f"[ERROR] <ARCH={self.arch}> Configure File with instrunction '{instr}' has no descriptions information!")
+                    raise Exception
+                for des in all_descriptions:
+                    original_ins = des.split('-')[0].strip()
+                    instr_class.add(original_ins.lower())
+
+            return instr_class
+
         # 如果是CAPSTONE不支持的架构，不做过滤
         if PROCESSOR_ARCHITECTURES.get(self.arch) is None:
             return True
 
         # print(self.binary.hex())
-        head_ins, tail_ins = head_ins.lower(), tail_ins.lower()
+        head_ins, tail_ins = instr_preprocess(head_ins.lower()), instr_preprocess(tail_ins.lower())
         # 根据架构初始化
-        offset = 0x1000
+        offset = 0x10000
         capstone_arguments = PROCESSOR_ARCHITECTURES[self.arch]
         if self.arch == 'ARM':
             offset = 0x08000000
+        elif self.arch == 'TRICORE':
+            offset = 0x80000000
         # 反汇编分析：线性扫描算法
         flag = False
         for cs_mode in capstone_arguments['MODES']:
             cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
             md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
             reverse_res = [(ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()) for ins in md.disasm(code=self.binary, offset=offset)]
-            # print(f'=== {self.arch}:{cs_mode} ===')
-            # for i, ins in enumerate(reverse_res):
-            #     print(f"{i} 0x{ins[0]:x}\t0x{bytes(ins[1]).hex():8s}\t{ins[2]}  {ins[3]}")
-            if len(reverse_res) > 0 and reverse_res[0][2] == head_ins and reverse_res[-1][2] == tail_ins:
+            if len(reverse_res) > 0 and ("*" in head_ins or reverse_res[0][2] in head_ins) and ("*" in tail_ins or reverse_res[-1][2] in tail_ins):
+                # print(f'=== {self.arch}:{cs_mode} ===')
+                # for i, ins in enumerate(reverse_res):
+                #     if ins[2] == 'nop':
+                #         continue
+                #     print(f"{i} 0x{ins[0]:x}\t0x{bytes(ins[1]).hex():8s}\t{ins[2]}  {ins[3]}")
+                # print(f"[BinaryBlock-func-isReversedResultValid] {self.arch}-Mode={cs_mode} is Proper!")
                 flag = True
                 break
         return flag
@@ -129,11 +158,16 @@ class BinaryBlock:
         """
         # print(f'=== FUNC: {self.block_pair} ===')
         # 识别
-        for key in self.pairs_dict.keys():
-            for one_dict in self.pairs_dict[key]:
-                ins1, ins2 = one_dict["ins"].keys()
+        for key in self.inner_pairs_dict.keys():
+            for cur_type_pair in self.inner_pairs_dict[key]:
+                ins1, ins2 = cur_type_pair["ins"]
                 possible_ins1, possible_ins2 = ins_pair_identify(
-                    ins1=ins1, ins2=ins2, endian=self.endian, binary=self.binary, ins_dict=one_dict["ins"], reverse_unit=self.reverse_unit
+                    ins1=ins1, 
+                    ins2=ins2, 
+                    endian=self.endian, 
+                    binary=self.binary, 
+                    ins_dict={ins1: self.instructions_info[ins1], ins2: self.instructions_info[ins2]}, 
+                    reverse_unit=self.reverse_unit
                 )
                 # 筛掉不合理的指令，如起始地址为奇数的
                 possible_ins1 = [match_ins for match_ins in possible_ins1 if match_ins[1] % 2 == 0]
@@ -143,8 +177,12 @@ class BinaryBlock:
                     continue
                 # 特征识别 + 组对儿
                 cur_pairs = create_block_pair(
-                    ins_collection1=possible_ins1, ins_collection2=possible_ins2, features=features_configure_init(head_instr=ins1, tail_instr=ins2, features=one_dict["features"]), 
-                    endian=self.endian, reverse_unit=self.reverse_unit, min_ins_length=self.min_ins_length,
+                    ins_collection1=possible_ins1, 
+                    ins_collection2=possible_ins2, 
+                    features=features_configure_init(head_instr=ins1, tail_instr=ins2, features=cur_type_pair["features"]), 
+                    endian=self.endian, 
+                    reverse_unit=self.reverse_unit, 
+                    min_ins_length=self.min_ins_length,
                     alignment_bytes=self.alignment_bytes
                 )
                 if len(cur_pairs) == 0:
@@ -156,28 +194,6 @@ class BinaryBlock:
                 self.other_pairs[key].append(content)
         
         return self.other_pairs
-
-    def analyzeHighUsageInstruction(self):
-        """
-        分析指定架构的高频指令在块内的出现频率；
-        """
-        # 获取指令
-        high_usage_dict: dict = self.others_dict.get('HighUsage')
-        if high_usage_dict is None:
-            print("[BinaryBlock-func-analyzeHighUsageInstruction] You have not set the HighUsage Instructions!")
-            return False
-        # 筛查
-        for instr in high_usage_dict.keys():
-            instr_ls = single_ins_analysis(
-                ins=instr,
-                endian=self.endian,
-                binary=self.binary,
-                ins_dict=high_usage_dict,
-                reverse_unit=self.reverse_unit
-            )
-            self.high_frequency_instr.extend([e for e in instr_ls if (e[1] % self.min_ins_length) == 0])
-
-        return self.high_frequency_instr
     
 
 ############################# 指令搜索算法 #############################
@@ -249,6 +265,7 @@ def ins_pair_identify(ins1: str, ins2: str, endian: str, binary: bytes, ins_dict
     return ins1_result, ins2_result
 
 
+############################# 跳转指令预处理 #############################
 def call_instructions_rebuild(arch_info: dict, calc_info: dict, call_instructions: list[tuple], org_binary: bytes) -> list[tuple]:
     """
     - 输入：
@@ -329,6 +346,10 @@ def create_block_pair(ins_collection1: list, ins_collection2: list, endian: str,
     sorted_ins = sorted(sorted_ins, key=lambda match_item: match_item[1])
     del ins_collection1, ins_collection2
 
+    # 如果对齐字节长度大于最小指令字节长度，证明存在nop等填充/对齐指令
+    if alignment_bytes > min_ins_length:
+        min_ins_length = alignment_bytes
+
     # 余数列表
     remain_results = dict()
     for i in range(min_ins_length):
@@ -343,12 +364,18 @@ def create_block_pair(ins_collection1: list, ins_collection2: list, endian: str,
     # 初步组对儿：按照 (addr=0 | head_ins --> addr=alignment*n | tail_ins)间，无重复指令的规律；
     for k in remain_results.keys():
         curls = remain_results[k]
-        len_curls = len(curls)
-        for i, ins in enumerate(curls):  # 从余数列表中获取对儿 [..., head-i, head-j, tail-n, ...] => (head-j, tail-n)
-            if ((i + 1) < len_curls):
-                next_ins = curls[i + 1]
-                if (ins[-1] and not next_ins[-1]) and ((next_ins[1] - ins[1]) % alignment_bytes == 0):  
-                        block_pairs.append((ins, next_ins)) 
+        p, len_curls = 0, len(curls)
+        head, tail = None, None
+        while p < len_curls: # 从余数列表中获取对儿 [..., head-i, head-j, tail-n, ...] => (head-j, tail-n)
+            if curls[p][-1]:
+                head = curls[p]
+                p += 1
+                continue
+            if head is not None:
+                tail = curls[p]
+                block_pairs.append((head, tail))
+                head = None
+            p += 1 
     # print(f"[BLOCK PAIRS WITHOUT FEATURES] {len(block_pairs)}")
 
     # 特征筛查
@@ -376,7 +403,6 @@ def create_block_pair(ins_collection1: list, ins_collection2: list, endian: str,
 
 
 ############################# 按照指令特征对指令对进行筛选 #############################
-# TODO: 持续更新，寄存器特征策略
 def filter_pairs_with_register(instr_pairs: list[tuple], endian: str, reverse_unit: int, mask_endian: str, register_mask: list[list[bytes]]) -> list[tuple]:
     """
     分析两个指令蕴含的寄存求编码是否一致；  

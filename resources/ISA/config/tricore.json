@@ -1,204 +1,179 @@
 {
-    "BLOCK":{
-        "BRANCH": [{
-            "ins":{
-                "call-r-func": {
-                    "endian": "be",
-                    "regex": [
-                        "...\\x6d",
-                        ".\\x5c"
-                    ],
-                    "format":[
-                        "\\x00\\x00\\x00\\x6d",
-                        "\\x00\\x5c"
-                    ],
-                    "mask":[
-                        "\\x00\\x00\\x00\\xff",
-                        "\\x00\\xff"
-                    ],
-                    "descriptions":[
-                        "CALL - Relative Address - Add the value specified by disp24, multiplied by two and sign-extended, to the address of the CALL instruction and jump to the resulting address. The target address range is ±16 MBytes relative to the current PC.",
-                        "CALL - Relative Address - Add the value specified by disp8, multiplied by two and sign-extended, to the address of the CALL instruction, and jump to the resulting address. The target address range is ±256 bytes relative to the current PC."
-                    ]
-                },
-                "ret": {
-                    "endian": "be",
-                    "regex": [
-                        "[\\x90-\\x9f]\\x00"
-                    ],
-                    "format":[
-                        "\\x90\\x00"
-                    ],
-                    "mask":[
-                        "\\xf0\\xff"
-                    ],
-                    "descriptions":[
-                        "RET - SR - Return from a function that was invoked with a CALL instruction. The return address is in register A[11] (return address). The caller's upper context register values are restored as part of the return operation."
-                    ]
-                }
-            },
-            "features":{}
-        }]
+    "INSTRUCTIONS": {
+        "call-r-func": {
+            "endian": "be",
+            "regex": [
+                "...\\x6d",
+                ".\\x5c"
+            ],
+            "format":[
+                "\\x00\\x00\\x00\\x6d",
+                "\\x00\\x5c"
+            ],
+            "mask":[
+                "\\x00\\x00\\x00\\xff",
+                "\\x00\\xff"
+            ],
+            "descriptions":[
+                "CALL - Relative Address - Add the value specified by disp24, multiplied by two and sign-extended, to the address of the CALL instruction and jump to the resulting address. The target address range is ±16 MBytes relative to the current PC.",
+                "CALL - Relative Address - Add the value specified by disp8, multiplied by two and sign-extended, to the address of the CALL instruction, and jump to the resulting address. The target address range is ±256 bytes relative to the current PC."
+            ]
+        },
+        "ret": {
+            "endian": "be",
+            "regex": [
+                "[\\x90-\\x9f]\\x00"
+            ],
+            "format":[
+                "\\x90\\x00"
+            ],
+            "mask":[
+                "\\xf0\\xff"
+            ],
+            "descriptions":[
+                "RET - SR - Return from a function that was invoked with a CALL instruction. The return address is in register A[11] (return address). The caller's upper context register values are restored as part of the return operation."
+            ]
+        },
+        "movh.a": {
+            "endian":"be",
+            "regex": [
+                "...\\x91"
+            ],
+            "format": [
+                "\\x00\\x00\\x00\\x91"
+            ], 
+            "mask": [
+                "\\x00\\x00\\x00\\xff"
+            ],
+            "descriptions": [
+                "MOVH.A - A[c], const16 (RLC) - Move the value const16 to the most-significant half-word of address register A[c] and set the least-significant 16-bits to zero."
+            ]
+        },
+        "lea": {
+            "endian":"be", 
+            "regex": [
+                "...\\xd9"
+            ],
+            "format": [
+                "\\x00\\x00\\x00\\xd9"
+            ], 
+            "mask": [
+                "\\x00\\x00\\x00\\xff"
+            ],
+            "descriptions": [
+                "LEA - A[a], A[b], off16 (BOL)(Base + Long Offset Addressing Mode) - Compute the absolute (effective) address defined by the addressing mode and put the result in address register A[a]."
+            ]
+        },
+        "ld.x": {
+            "endian":"be", 
+            "regex": [
+                "...\\x39",
+                "...\\x19"
+            ],
+            "format": [
+                "\\x00\\x00\\x00\\x39",
+                "\\x00\\x00\\x00\\x19"
+            ], 
+            "mask": [
+                "\\x00\\x00\\x00\\xff",
+                "\\x00\\x00\\x00\\xff"
+            ],
+            "descriptions": [
+                "LD.BU - D[a], A[b], off16 (BOL)(Base + Long Offset Addressing Mode) - Load the byte contents of the memory location specified by the addressing mode, zero-extended, into either data register D[a] or D[15].",
+                "LD.W - D[a], A[b], off16 (BOL)(Base + Long Offset Addressing Mode) - Load word contents of the memory location specified by the addressing mode into data register D[a]."
+            ]
+        },
+        "st.x": {
+            "endian":"be", 
+            "regex": [
+                "...\\xe9",
+                "...\\x59"
+            ],
+            "format": [
+                "\\x00\\x00\\x00\\xe9",
+                "\\x00\\x00\\x00\\x59"
+            ], 
+            "mask": [
+                "\\x00\\x00\\x00\\xff",
+                "\\x00\\x00\\x00\\xff"
+            ],
+            "descriptions": [
+                "LD.B - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the byte value in the eight least-significant bits of data register D[a] to the byte memory location specified by the addressing mode.",
+                "LD.W - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the word value in data register D[a] to the memory location specified by the addressing mode."
+            ]
+        }
     },
-    "PAIRS":{
-        "LONG_JMP_EA": [{
-            "ins":{
-                "movh.a": {
-                    "endian":"be",
-                    "regex": [
-                        "...\\x91"
+    "PAIRS": {
+        "BLOCK_PAIRS":{
+            "BRANCH": [{
+                "ins":["call-r-func", "ret"],
+                "features":{}
+            }]
+        },
+        "INNER_BLOCK_PAIRS":{
+            "LONG_JMP_EA": [{
+                "ins":["movh.a", "lea"],
+                "features": {
+                    "scope": [
+                        "movh.a",
+                        "lea", 
+                        [1, 5]
                     ],
-                    "format": [
-                        "\\x00\\x00\\x00\\x91"
-                    ], 
-                    "mask": [
-                        "\\x00\\x00\\x00\\xff"
-                    ],
-                    "descriptions": [
-                        "MOVH.A - A[c], const16 (RLC) - Move the value const16 to the most-significant half-word of address register A[c] and set the least-significant 16-bits to zero."
-                    ]
-                },
-                "lea": {
-                    "endian":"be", 
-                    "regex": [
-                        "...\\xd9"
-                    ],
-                    "format": [
-                        "\\x00\\x00\\x00\\xd9"
-                    ], 
-                    "mask": [
-                        "\\x00\\x00\\x00\\xff"
-                    ],
-                    "descriptions": [
-                        "LEA - A[a], A[b], off16 (BOL)(Base + Long Offset Addressing Mode) - Compute the absolute (effective) address defined by the addressing mode and put the result in address register A[a]."
+                    "register":[
+                        "movh.a",
+                        "lea",
+                        "BE",
+                        [
+                            ["\\xf0\\x00\\x00\\x00"],
+                            ["\\x00\\x00\\x0f\\x00"]
+                        ]
                     ]
                 }
-            },
-            "features": {
-                "scope": [
-                    "movh.a",
-                    "lea", 
-                    [1, 5]
-                ],
-                "register":[
-                    "movh.a",
-                    "lea",
-                    "BE",
-                    [
-                        ["\\xf0\\x00\\x00\\x00"],
-                        ["\\x00\\x00\\x0f\\x00"]
-                    ]
-                ]
-            }
-        }],
-        "LOAD_DATA":[{
-            "ins":{
-                "movh.a": {
-                    "endian":"be",
-                    "regex": [
-                        "...\\x91"
+            }],
+            "LOAD_DATA":[{
+                "ins":["movh.a", "ld.x"],
+                "features":{
+                    "distance":[
+                        "movh.a",
+                        "ld.x",
+                        1
                     ],
-                    "format": [
-                        "\\x00\\x00\\x00\\x91"
-                    ], 
-                    "mask": [
-                        "\\x00\\x00\\x00\\xff"
-                    ],
-                    "descriptions": [
-                        "MOVH.A - A[c], const16 (RLC) - Move the value const16 to the most-significant half-word of address register A[c] and set the least-significant 16-bits to zero."
-                    ]
-                },
-                "ld.x": {
-                    "endian":"be", 
-                    "regex": [
-                        "...\\x39",
-                        "...\\x19"
-                    ],
-                    "format": [
-                        "\\x00\\x00\\x00\\x39",
-                        "\\x00\\x00\\x00\\x19"
-                    ], 
-                    "mask": [
-                        "\\x00\\x00\\x00\\xff",
-                        "\\x00\\x00\\x00\\xff"
-                    ],
-                    "descriptions": [
-                        "LD.BU - D[a], A[b], off16 (BOL)(Base + Long Offset Addressing Mode) - Load the byte contents of the memory location specified by the addressing mode, zero-extended, into either data register D[a] or D[15].",
-                        "LD.W - D[a], A[b], off16 (BOL)(Base + Long Offset Addressing Mode) - Load word contents of the memory location specified by the addressing mode into data register D[a]."
+                    "register":[
+                        "movh.a",
+                        "ld.x",
+                        [
+                            ["\\xf0\\x00\\x00\\x00"],
+                            ["\\x00\\x00\\xf0\\x00"]
+                        ]
                     ]
                 }
-            },
-            "features":{
-                "distance":[
-                    "movh.a",
-                    "ld.x",
-                    1
-                ],
-                "register":[
-                    "movh.a",
-                    "ld.x",
-                    [
-                        ["\\xf0\\x00\\x00\\x00"],
-                        ["\\x00\\x00\\xf0\\x00"]
-                    ]
-                ]
-            }
-        }],
-        "STORE_DATA":[{
-            "ins":{
-                "movh.a": {
-                    "endian":"be",
-                    "regex": [
-                        "...\\x91"
+            }],
+            "STORE_DATA":[{
+                "ins":["movh.a", "st.x"],
+                "features":{
+                    "distance":[
+                        "movh.a",
+                        "st.x",
+                        1
                     ],
-                    "format": [
-                        "\\x00\\x00\\x00\\x91"
-                    ], 
-                    "mask": [
-                        "\\x00\\x00\\x00\\xff"
-                    ],
-                    "descriptions": [
-                        "MOVH.A - A[c], const16 (RLC) - Move the value const16 to the most-significant half-word of address register A[c] and set the least-significant 16-bits to zero."
-                    ]
-                },
-                "st.x": {
-                    "endian":"be", 
-                    "regex": [
-                        "...\\xe9",
-                        "...\\x59"
-                    ],
-                    "format": [
-                        "\\x00\\x00\\x00\\xe9",
-                        "\\x00\\x00\\x00\\x59"
-                    ], 
-                    "mask": [
-                        "\\x00\\x00\\x00\\xff",
-                        "\\x00\\x00\\x00\\xff"
-                    ],
-                    "descriptions": [
-                        "LD.B - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the byte value in the eight least-significant bits of data register D[a] to the byte memory location specified by the addressing mode.",
-                        "LD.W - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the word value in data register D[a] to the memory location specified by the addressing mode."
+                    "register":[
+                        "movh.a",
+                        "st.x",
+                        [
+                            ["\\xf0\\x00\\x00\\x00"],
+                            ["\\x00\\x00\\xf0\\x00"]
+                        ]
                     ]
                 }
-            },
-            "features":{
-                "distance":[
-                    "movh.a",
-                    "st.x",
-                    1
-                ],
-                "register":[
-                    "movh.a",
-                    "st.x",
-                    [
-                        ["\\xf0\\x00\\x00\\x00"],
-                        ["\\x00\\x00\\xf0\\x00"]
-                    ]
-                ]
-            }
-        }]
+            }]
+        }
     },
     "OTHERS":{
-        "HighUsage": {}
+        "HighUsage": {},
+        "MemoryArgs":{
+            "reverse_unit_size": 4,
+            "min_instr_length": 2,
+            "alignment_size": 2
+        }
     }
 }
