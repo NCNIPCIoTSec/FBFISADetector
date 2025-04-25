@@ -1,6 +1,7 @@
 import os
 import re
 
+from eval.calc import calc_pair_rate
 from utils.bytes_op import bytes_fmt_compare
 from analysis.instruction_analysis import BinaryAnalyzer
 
@@ -51,6 +52,6 @@ if __name__ == "__main__":
             file_path = demo_dir+f'{arch}/bin/'+demo
             if not os.path.isfile(file_path):
                 continue
-            print(f" ======================== <{arch}:{demo}> ========================")
+            print(f"\n\n ======================== <{arch}:{demo}> ========================")
             ba = BinaryAnalyzer(bin_file_path=file_path)
             ba.analyzing()

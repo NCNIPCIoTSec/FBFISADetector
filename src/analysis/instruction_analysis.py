@@ -1,5 +1,3 @@
-import os
-import pprint
 import re
 import json
 import capstone as cps
@@ -36,23 +34,10 @@ class BinaryBlock:
     arch = None
     inner_pairs_dict = {}
     instructions_info = {}
+    complete_binary = b''
 
-    def __init__(self, endian: str, binary: bytes, block_stack_pair: tuple):
-        # 要求先初始化类信息
-        if self.arch is None:
-            print("[BinaryBlock Class Exception] Please Load Class Configuration information first, and then initialize this object...")
-            raise Exception
-        # 创建对象，配置其信息
-        self.endian = endian.upper()
-        self.binary = binary
-        self.block_pair = block_stack_pair
-        # 输出结果记录
-        self.high_frequency_instr: list = []
-        self.is_valid_block: bool = None  # record final judgement result - Boolean
-        self.other_pairs = dict()  # record pairs found by func-get_inner_block_pairs
-    
     @classmethod
-    def load_configure_info(cls, arch: str, inner_pairs_dict: dict, instructions_info: dict):
+    def loadConfigureInfo(cls, arch: str, inner_pairs_dict: dict, instructions_info: dict):
         """
         获取类的相关配置信息
         """
@@ -71,12 +56,16 @@ class BinaryBlock:
             cls.alignment_bytes = 4
         elif arch == 'TRICORE':
             cls.reverse_unit = 4
-    
-    def isReversedResultValid(self, head_ins: str, tail_ins: str) -> bool:
-        """
-        线性扫描逆向分析算法来分析“可能”为函数块
-        """
-        
+
+    @ classmethod
+    def loadCompleteBinary(cls, binary: bytes):
+        cls.complete_binary = binary
+
+    def __init__(self, endian: str, block_pair_instr: tuple[str, str], block_pair_data: tuple[tuple, tuple]):
+        # 要求先初始化类信息
+        if self.arch is None:
+            print("[BinaryBlock Class Exception] Please Load Class Configuration information first, and then initialize this object...")
+            raise Exception
         def instr_preprocess(instr: str) -> set[str]:
             '''
             添加一些预处理操作，处理call指令跳转和指令名称的问题
@@ -95,13 +84,24 @@ class BinaryBlock:
                     instr_class.add(original_ins.lower())
 
             return instr_class
+        # 创建对象，配置其信息
+        self.endian = endian.upper()
+        self.head_instr, self.tail_instr = instr_preprocess(block_pair_instr[0]), instr_preprocess(block_pair_instr[1])
+        self.block_pair = block_pair_data
+        # 输出结果记录
+        self.high_frequency_instr: list = []
+        self.is_valid_block: bool = None  # record final judgement result - Boolean
+        self.other_pairs = dict()  # record pairs found by func-get_inner_block_pairs
 
+    def isReversedHeadTailValid(self) -> bool:
+        """
+        线性扫描逆向分析算法来分析“可能”为函数块
+        """
         # 如果是CAPSTONE不支持的架构，不做过滤
         if PROCESSOR_ARCHITECTURES.get(self.arch) is None:
             return True
 
         # print(self.binary.hex())
-        head_ins, tail_ins = instr_preprocess(head_ins.lower()), instr_preprocess(tail_ins.lower())
         # 根据架构初始化
         offset = 0x10000
         capstone_arguments = PROCESSOR_ARCHITECTURES[self.arch]
@@ -114,8 +114,8 @@ class BinaryBlock:
         for cs_mode in capstone_arguments['MODES']:
             cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
             md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
-            reverse_res = [(ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()) for ins in md.disasm(code=self.binary, offset=offset)]
-            if len(reverse_res) > 0 and ("*" in head_ins or reverse_res[0][2] in head_ins) and ("*" in tail_ins or reverse_res[-1][2] in tail_ins):
+            reverse_res = [(ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()) for ins in md.disasm(code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], offset=offset)]
+            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
                 # print(f'=== {self.arch}:{cs_mode} ===')
                 # for i, ins in enumerate(reverse_res):
                 #     if ins[2] == 'nop':
@@ -139,7 +139,7 @@ class BinaryBlock:
                     ins1=ins1, 
                     ins2=ins2, 
                     endian=self.endian, 
-                    binary=self.binary, 
+                    binary=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], 
                     ins_dict={ins1: self.instructions_info[ins1], ins2: self.instructions_info[ins2]}, 
                     reverse_unit=self.reverse_unit
                 )
@@ -177,13 +177,15 @@ class BlocksFilter:
     def __init__(self, blocks: list[BinaryBlock]):
         self.blocks = blocks
         self.have_pairs_blocks = []
-        self.can_reversed_blocks = []
+        self.reversed_ht_vaild_blocks = []
 
-    def filterBlocksByInnerPairs(self):
-        self.have_pairs_blocks = [block for block in self.blocks if len(block.getInnerBlockPairs()) > 0]
+    def filterBlocksByInnerPairs(self) -> list[BinaryBlock]:
+        self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
+        return self.have_pairs_blocks
     
-    def filterBlocksByReverseEngineer(self):
-        pass
+    def filterBlocksByHeadTailCheck(self) -> list[BinaryBlock]:
+        self.reversed_ht_vaild_blocks = [i for i, j in enumerate(self.have_pairs_blocks) if self.blocks[j].isReversedHeadTailValid()]
+        return self.reversed_ht_vaild_blocks
 
 
 class BinaryAnalyzer:
@@ -212,14 +214,14 @@ class BinaryAnalyzer:
         with open(file=bin_file_path, mode='rb') as fr:
             self.binary_res = fr.read()
 
-
     def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict):
         '''
         指定特定架构和特定
         '''
         # 设置
         branch_calc_certain_arch = self.branch_calc_info.get(isa_arch.lower())
-        BinaryBlock.load_configure_info(
+        BinaryBlock.loadCompleteBinary(binary=self.binary_res)
+        BinaryBlock.loadConfigureInfo(
             arch=isa_arch, 
             inner_pairs_dict=ins_pair_dict['PAIRS']['INNER_BLOCK_PAIRS'], 
             instructions_info=ins_pair_dict['INSTRUCTIONS']
@@ -277,26 +279,22 @@ class BinaryAnalyzer:
                     features=features
                 )
                 # ======================================== <BLOCK的创建于内部分析> ========================================
-                count = 0
-                valid_blocks, it_blocks = [], []
+                blocks = []
                 for block_pair in block_pairs:
-                    block_bytes = self.binary_res[block_pair[0][1]: block_pair[1][2]]
-                    # print(f"{block_pair}\n{block_bytes}")
-                    cur_block = BinaryBlock(endian=endian, block_stack_pair=block_pair, binary=block_bytes)
-                    if len(cur_block.getInnerBlockPairs()) > 0:
-                        it_blocks.append(cur_block)
-                        if cur_block.isReversedResultValid(head_ins=head_ins, tail_ins=tail_ins):
-                            valid_blocks.append(cur_block)
-                        count += 1
-                    else:
-                        count -= 0.5
+                    blocks.append(
+                        BinaryBlock(endian=endian, block_pair_instr=(head_ins, tail_ins), block_pair_data=block_pair)
+                    )
+                del block_pairs
+
+                blk_filter = BlocksFilter(blocks=blocks)
+                del blocks
                 # 评估
-                calc_BlockRates(blocks=len(block_pairs), blocks_with_pair=len(it_blocks), blocks_valid_reverse=len(valid_blocks))
+                calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
     
     def analyzing(self):
         for arch in self.supported_arch.keys():
             arch = arch.upper()
-            print(f'=> {arch}')
+            print(f'\n=> {arch}')
             # 获取本架构支持的字节序
             ins_pair_dict = dict()
             with open(file=self.supported_arch.get(arch), mode='r', encoding='utf-8') as fr:
@@ -305,7 +303,7 @@ class BinaryAnalyzer:
             # pprint.pprint(ins_pair_dict)
             # 分析
             if supported_endian == '*':
-                print(f'\n-------------------- {arch}:LE --------------------')
+                print(f'-------------------- {arch}:LE --------------------')
                 self.archAnalysis(isa_arch=arch, endian='LE', ins_pair_dict=ins_pair_dict)
                 print(f'-------------------- {arch}:BE --------------------')
                 self.archAnalysis(isa_arch=arch, endian='BE', ins_pair_dict=ins_pair_dict)
