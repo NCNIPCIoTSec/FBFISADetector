@@ -1,7 +1,11 @@
 import os
+import pprint
 import re
+import json
 import capstone as cps
 
+
+from eval.calc import *
 from analysis.branch_analysis import call_instruction_branch_addr as get_branch_addr
 from utils.translator import hexString2bytes, string2bytes_regex
 from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
@@ -22,36 +26,6 @@ PROCESSOR_ARCHITECTURES = {
         "MODES": [cps.CS_MODE_TRICORE_180]
     }
 }
-
-
-class BinaryAnalyzer:
-    isa_config_arch_path = set()
-
-    @classmethod
-    def update_supported_ISAArch(cls, isa_config_dir: str = "./resources/ISA/config/"):
-        for file_name in os.listdir(isa_config_dir):
-            cls.isa_config_arch_path.add(isa_config_dir + file_name)
-
-    def __init__(self, bin_file_path: str):
-        # 读取二进制文件内容
-        self.binary_res = b''
-        with open(file=bin_file_path, mode='rb') as fr:
-            self.binary_res = fr.read()
-        # 初始化指令对儿统计记录
-        self.ins_pair_calc_record = dict()
-        if len(self.isa_config_arch_path) > 0:
-            for path in self.isa_config_arch_path:
-                arch_type = os.path.split(path)[-1].strip('.json').upper()
-                self.ins_pair_calc_record[arch_type] = {'BE': [], 'LE': []}
-
-    # 输入：指令集架构、大小端、指令1（指令与指令数量）、指令2（指令与指令数量）
-    def update_ins_pair_clac_result(self, arch: str, endian: str, ins1: tuple[str, int], ins2: tuple[str, int]):
-        # 查询架构内容是否记录
-        arch = arch.upper()
-        if self.ins_pair_calc_record.get(arch) is None:
-            self.ins_pair_calc_record[arch] = {'BE': [], 'LE': []}
-        # 记录指令对儿内容
-        self.ins_pair_calc_record[arch][f"{ins1[0].upper()/ins2[0].upper()}"][endian.upper()] = [ins1[1], ins2[1]]
 
 
 class BinaryBlock:
@@ -195,6 +169,151 @@ class BinaryBlock:
         
         return self.other_pairs
     
+
+class BlocksFilter:
+    '''
+    得到的二进制块进行过滤分析；
+    '''
+    def __init__(self, blocks: list[BinaryBlock]):
+        self.blocks = blocks
+        self.have_pairs_blocks = []
+        self.can_reversed_blocks = []
+
+    def filterBlocksByInnerPairs(self):
+        self.have_pairs_blocks = [block for block in self.blocks if len(block.getInnerBlockPairs()) > 0]
+    
+    def filterBlocksByReverseEngineer(self):
+        pass
+
+
+class BinaryAnalyzer:
+    supported_arch = dict()
+    branch_calc_info = dict()
+
+    @classmethod
+    def updateSupportedArch(cls, supported_arch_info: dict):
+        '''
+        - 输入：
+          - arch_info: dict, 支持的架构以及架构配置文件的存储路径  
+            形式如：{"ARM": "../resources/ISA/config/arm.json", "TriCore": "../resources/ISA/config/tricore.json"}  
+        '''
+        cls.supported_arch = dict()
+        for k in supported_arch_info.keys():
+            cls.supported_arch[k.upper()] = supported_arch_info[k]
+
+    @classmethod
+    def loadBrachCalculationExpressions(cls, branch_calc_info_path: str = "../resources/ISA/config/call_branch.json"):
+        with open(file=branch_calc_info_path, mode='r', encoding='utf-8') as fr:
+            cls.branch_calc_info = json.load(fp=fr)
+
+    def __init__(self, bin_file_path: str):
+        # 读取二进制文件内容
+        self.binary_res = b''
+        with open(file=bin_file_path, mode='rb') as fr:
+            self.binary_res = fr.read()
+
+
+    def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict):
+        '''
+        指定特定架构和特定
+        '''
+        # 设置
+        branch_calc_certain_arch = self.branch_calc_info.get(isa_arch.lower())
+        BinaryBlock.load_configure_info(
+            arch=isa_arch, 
+            inner_pairs_dict=ins_pair_dict['PAIRS']['INNER_BLOCK_PAIRS'], 
+            instructions_info=ins_pair_dict['INSTRUCTIONS']
+        )
+        
+        # 从BLOCK中识别
+        for k, pair_ls in ins_pair_dict['PAIRS']['BLOCK_PAIRS'].items():
+            print(f"PROCESS BLOCK TYPE - {k}")
+            address_length = ins_pair_dict['OTHERS']['MemoryArgs']['address_length']
+            reverse_unit = ins_pair_dict['OTHERS']['MemoryArgs']['reverse_unit_size']
+            min_instr_length = ins_pair_dict['OTHERS']['MemoryArgs']['min_instr_length']
+            alignment_bytes_size = ins_pair_dict['OTHERS']['MemoryArgs']['alignment_size']
+            for bp in pair_ls:
+                # 获取信息
+                head_ins, tail_ins = bp['ins']
+                features = features_configure_init(head_ins, tail_ins, bp['features'])
+                # ======================================== <抽取指令对儿> ========================================
+                possible_block_head, possible_block_tail = ins_pair_identify(
+                    ins1=head_ins, ins2=tail_ins, 
+                    endian=endian, binary=self.binary_res, 
+                    ins_dict={head_ins: ins_pair_dict['INSTRUCTIONS'][head_ins], tail_ins: ins_pair_dict['INSTRUCTIONS'][tail_ins]}, 
+                    reverse_unit=reverse_unit
+                )
+                print(f"{head_ins.upper()}: {len(possible_block_head)} | {tail_ins.upper()}: {len(possible_block_tail)}")
+                print(f"      PAIR_RATE = {calc_pair_rate(len(possible_block_head), len(possible_block_tail)) * 100: .2f}%")
+                print(f"HEAD BYTES_RATE = {calc_InsBytesBinaryFile_rate(possible_block_head, len(self.binary_res))*100: .5f}%")
+                print(f"TAIL BYTES_RATE = {calc_InsBytesBinaryFile_rate(possible_block_tail, len(self.binary_res))*100: .5f}%")
+                print("POSSIBLE CALL INS NUMBERS:", len(possible_block_head))
+                # ======================================== <指令对儿组合> ========================================
+                # print([instr.hex() for instr, _, _ in possible_block_head])
+                if k == 'BRANCH':
+                    if branch_calc_certain_arch is None:
+                        print(f"[BRACH-{head_ins}:{tail_ins}] Not Have Calculation-Expressions Recorded in Configuration-File...")
+                        continue
+                    possible_block_head = call_instructions_rebuild(
+                        arch_info={
+                            "arch": isa_arch,
+                            "ins_tag": head_ins,
+                            "endian": endian,
+                            "reverse_unit": reverse_unit,
+                            "address_length": address_length
+                        },
+                        calc_info=branch_calc_certain_arch,
+                        call_instructions=possible_block_head,
+                        org_binary=self.binary_res
+                    )
+                block_pairs = create_block_pair(
+                    arch = isa_arch,
+                    endian = endian,
+                    ins_collection1 = possible_block_head,
+                    ins_collection2 = possible_block_tail,
+                    reverse_unit = reverse_unit,
+                    min_ins_length = min_instr_length,
+                    alignment_bytes=alignment_bytes_size,
+                    features=features
+                )
+                # ======================================== <BLOCK的创建于内部分析> ========================================
+                count = 0
+                valid_blocks, it_blocks = [], []
+                for block_pair in block_pairs:
+                    block_bytes = self.binary_res[block_pair[0][1]: block_pair[1][2]]
+                    # print(f"{block_pair}\n{block_bytes}")
+                    cur_block = BinaryBlock(endian=endian, block_stack_pair=block_pair, binary=block_bytes)
+                    if len(cur_block.getInnerBlockPairs()) > 0:
+                        it_blocks.append(cur_block)
+                        if cur_block.isReversedResultValid(head_ins=head_ins, tail_ins=tail_ins):
+                            valid_blocks.append(cur_block)
+                        count += 1
+                    else:
+                        count -= 0.5
+                # 评估
+                calc_BlockRates(blocks=len(block_pairs), blocks_with_pair=len(it_blocks), blocks_valid_reverse=len(valid_blocks))
+    
+    def analyzing(self):
+        for arch in self.supported_arch.keys():
+            arch = arch.upper()
+            print(f'=> {arch}')
+            # 获取本架构支持的字节序
+            ins_pair_dict = dict()
+            with open(file=self.supported_arch.get(arch), mode='r', encoding='utf-8') as fr:
+                ins_pair_dict = json.load(fp=fr)
+            supported_endian = ins_pair_dict['OTHERS']['SupportedEndian'].upper()
+            # pprint.pprint(ins_pair_dict)
+            # 分析
+            if supported_endian == '*':
+                print(f'\n-------------------- {arch}:LE --------------------')
+                self.archAnalysis(isa_arch=arch, endian='LE', ins_pair_dict=ins_pair_dict)
+                print(f'-------------------- {arch}:BE --------------------')
+                self.archAnalysis(isa_arch=arch, endian='BE', ins_pair_dict=ins_pair_dict)
+            else:
+                print(f'-------------------- {arch}:{supported_endian} --------------------')
+                self.archAnalysis(isa_arch=arch, endian=supported_endian, ins_pair_dict=ins_pair_dict)
+
+
 
 ############################# 指令搜索算法 #############################
 def search_ins_by_regex(regex: re.Match[bytes], format: bytes, mask: bytes, binary: bytes) -> list[tuple]:
