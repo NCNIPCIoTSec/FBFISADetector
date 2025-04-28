@@ -47,11 +47,14 @@ if __name__ == "__main__":
     BinaryAnalyzer.updateSupportedArch(supported_arch_info=arch_info)
     BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=config_dir+"call_branch.json")
     
-    for arch in os.listdir(demo_dir):
-        for demo in os.listdir(demo_dir+f'{arch}/bin/'):
-            file_path = demo_dir+f'{arch}/bin/'+demo
-            if not os.path.isfile(file_path):
-                continue
-            print(f"\n\n ======================== <{arch}:{demo}> ========================")
-            ba = BinaryAnalyzer(bin_file_path=file_path)
-            ba.analyzing()
+    # for arch in os.listdir(demo_dir):
+    #     for demo in os.listdir(demo_dir+f'{arch}/bin/'):
+    #         file_path = demo_dir+f'{arch}/bin/'+demo
+    #         if not os.path.isfile(file_path):
+    #             continue
+    #         print(f"\n\n ======================== <{arch}:{demo}> ========================")
+    #         ba = BinaryAnalyzer(bin_file_path=file_path)
+    #         ba.analyzing()
+
+    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'arm/bin/FreeRTOS_ThreadCreation_0x8000000.bin')
+    ba.analyzing()

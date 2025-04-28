@@ -35,7 +35,7 @@
             ],
             "descriptions": [
                 "POP - T1 - Have PC - Variant: ARMv4T, ARMv5T*, ARMv6*, ARMv7",
-                "POP - T2 - <registers> contains more than one register - Variant: ARMv6T2, ARMv7"
+                "POP.W - T2 - <registers> contains more than one register - Variant: ARMv6T2, ARMv7"
             ]
         },
         "cmp": {

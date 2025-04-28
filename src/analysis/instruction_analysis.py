@@ -3,7 +3,7 @@ import json
 import capstone as cps
 
 
-from eval.calc import *
+from eval.calc import calc_BlockRates, calc_BlockPairInstrRates
 from analysis.branch_analysis import call_instruction_branch_addr as get_branch_addr
 from utils.translator import hexString2bytes, string2bytes_regex
 from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
@@ -92,6 +92,7 @@ class BinaryBlock:
         self.high_frequency_instr: list = []
         self.is_valid_block: bool = None  # record final judgement result - Boolean
         self.other_pairs = dict()  # record pairs found by func-get_inner_block_pairs
+        self.disassemble_record = {"capstone_arch": None, "capstone_mode": None, "offset": None}  # record disassemble args result from capstone
 
     def isReversedHeadTailValid(self) -> bool:
         """
@@ -114,14 +115,16 @@ class BinaryBlock:
         for cs_mode in capstone_arguments['MODES']:
             cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
             md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
-            reverse_res = [(ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()) for ins in md.disasm(code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], offset=offset)]
+            reverse_res = [
+                (ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()) 
+                for ins in md.disasm(
+                    code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], 
+                    offset=offset)
+            ]
             if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
-                # print(f'=== {self.arch}:{cs_mode} ===')
-                # for i, ins in enumerate(reverse_res):
-                #     if ins[2] == 'nop':
-                #         continue
-                #     print(f"{i} 0x{ins[0]:x}\t0x{bytes(ins[1]).hex():8s}\t{ins[2]}  {ins[3]}")
-                # print(f"[BinaryBlock-func-isReversedResultValid] {self.arch}-Mode={cs_mode} is Proper!")
+                self.disassemble_record["capstone_arch"] = capstone_arguments['ARCH']
+                self.disassemble_record["capstone_mode"] = cs_mode_with_endian
+                self.disassemble_record["offset"] = offset
                 flag = True
                 break
         return flag
@@ -168,6 +171,25 @@ class BinaryBlock:
                 self.other_pairs[key].append(content)
         
         return self.other_pairs
+    
+    def getBelongedFunctionBlock(self):
+        '''
+        当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
+        '''
+        # 如果当前的块未进行反汇编    
+        if self.disassemble_record["capstone_arch"] is None and self.disassemble_record["capstone_mode"] is None:
+            if not self.isReversedHeadTailValid():  # 如果当前块无法进行正确地反汇编
+                print("[Error] Block cannot be successfully reversed!")
+                return
+        disassembler = cps.Cs(arch=self.disassemble_record["capstone_arch"], 
+                              mode=self.disassemble_record["capstone_mode"])
+
+        start, end = self.block_pair[0][1], self.block_pair[1][2]
+        disasm_iter = disassembler.disasm(code=self.complete_binary[start:end], offset=self.disassemble_record["offset"])
+        print("==> REVERSing: ")
+        for ins in disasm_iter:
+            addr, ins_bytes, mnemonic, op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
+            print(f"0x{addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{mnemonic}  {op_str}")
     
 
 class BlocksFilter:
@@ -245,11 +267,8 @@ class BinaryAnalyzer:
                     ins_dict={head_ins: ins_pair_dict['INSTRUCTIONS'][head_ins], tail_ins: ins_pair_dict['INSTRUCTIONS'][tail_ins]}, 
                     reverse_unit=reverse_unit
                 )
-                print(f"{head_ins.upper()}: {len(possible_block_head)} | {tail_ins.upper()}: {len(possible_block_tail)}")
-                print(f"      PAIR_RATE = {calc_pair_rate(len(possible_block_head), len(possible_block_tail)) * 100: .2f}%")
-                print(f"HEAD BYTES_RATE = {calc_InsBytesBinaryFile_rate(possible_block_head, len(self.binary_res))*100: .5f}%")
-                print(f"TAIL BYTES_RATE = {calc_InsBytesBinaryFile_rate(possible_block_tail, len(self.binary_res))*100: .5f}%")
-                print("POSSIBLE CALL INS NUMBERS:", len(possible_block_head))
+                # 评估
+                calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
                 # ======================================== <指令对儿组合> ========================================
                 # print([instr.hex() for instr, _, _ in possible_block_head])
                 if k == 'BRANCH':
@@ -285,12 +304,15 @@ class BinaryAnalyzer:
                         BinaryBlock(endian=endian, block_pair_instr=(head_ins, tail_ins), block_pair_data=block_pair)
                     )
                 del block_pairs
-
                 blk_filter = BlocksFilter(blocks=blocks)
                 del blocks
                 # 评估
                 calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
-    
+                # ======================================== <数据流分析> ========================================
+                for blk_index in blk_filter.reversed_ht_vaild_blocks:
+                    blk_filter.blocks[blk_index].getBelongedFunctionBlock()
+
+
     def analyzing(self):
         for arch in self.supported_arch.keys():
             arch = arch.upper()
