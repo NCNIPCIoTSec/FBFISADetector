@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 
 from evaluate.calc import calc_pair_rate
@@ -30,13 +31,8 @@ def powerPCAnalysis(path: str):
     mfspr_result = [res.group().hex() for res in search_mfspr_res if bytes_fmt_compare(mask=ppc_mfspr_LR_mask, ins=res.group(), fmt_ins=ppc_mfspr_LR_fmt)]
     blr_result = [res.group().hex() for res in search_blr_res]
     print(f"Push stack: {len(mfspr_result)} | Pop Stack: {len(blr_result)} | Abs Rate = {calc_pair_rate(len(mfspr_result), len(blr_result)) * 100: .2f}%")
-        
 
-if __name__ == "__main__":
-    # # PowerPC分析
-    # for ppc_demo in os.listdir(demo_dir+'ppc/'):
-    #     print(f'==== {ppc_demo} ====')
-    #     powerPCAnalysis(demo_dir+'ppc/'+ppc_demo)
+def main():
     # ARM分析
     arch_info = dict()
     for arch_file in os.listdir(config_dir+'arch/'):
@@ -62,4 +58,17 @@ if __name__ == "__main__":
     #         print(f"\n\n ======================== <{arch}:{demo}> ========================")
     #         ba = BinaryAnalyzer(bin_file_path=file_path)
     #         ba.analyzing()
+
+
+if __name__ == "__main__":
+    # # PowerPC分析
+    # for ppc_demo in os.listdir(demo_dir+'ppc/'):
+    #     print(f'==== {ppc_demo} ====')
+    #     powerPCAnalysis(demo_dir+'ppc/'+ppc_demo)
+    with open(file='../resources/records.log', mode='w') as fw:
+        original_stdout = sys.stdout
+        sys.stdout = fw
+        main()
+        sys.stdout = original_stdout
+
 

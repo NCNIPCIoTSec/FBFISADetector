@@ -123,7 +123,7 @@ class BinaryBlock:
             if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
                 self.disassemble_record["capstone_arch"] = capstone_arguments['ARCH']
                 self.disassemble_record["capstone_mode"] = cs_mode_with_endian
-                self.disassemble_record["offset"] = offset
+                self.disassemble_record["offset"] = offset + self.block_pair[0][1]
                 flag = True
                 break
         return flag
