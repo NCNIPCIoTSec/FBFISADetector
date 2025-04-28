@@ -1,7 +1,7 @@
 import os
 import re
 
-from eval.calc import calc_pair_rate
+from evaluate.calc import calc_pair_rate
 from utils.bytes_op import bytes_fmt_compare
 from analysis.instruction_analysis import BinaryAnalyzer
 
@@ -46,7 +46,14 @@ if __name__ == "__main__":
     
     BinaryAnalyzer.updateSupportedArch(supported_arch_info=arch_info)
     BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=config_dir+"call_branch.json")
-    
+
+    print("\n\n ======================== <ARM:FreeRTOS_ThreadCreation> ========================")
+    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'arm/bin/FreeRTOS_ThreadCreation_0x8000000.bin')
+    ba.analyzing()
+    print("\n\n ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================")
+    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin')
+    ba.analyzing()
+
     # for arch in os.listdir(demo_dir):
     #     for demo in os.listdir(demo_dir+f'{arch}/bin/'):
     #         file_path = demo_dir+f'{arch}/bin/'+demo
@@ -56,5 +63,3 @@ if __name__ == "__main__":
     #         ba = BinaryAnalyzer(bin_file_path=file_path)
     #         ba.analyzing()
 
-    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'arm/bin/FreeRTOS_ThreadCreation_0x8000000.bin')
-    ba.analyzing()

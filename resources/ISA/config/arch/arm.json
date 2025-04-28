@@ -69,7 +69,7 @@
                 "CMP.W - (register) T3 - None - Variant: ARMv6T2, ARMv7"
             ]
         },
-        "b": {
+        "b-it": {
             "endian": "be",
             "regex": [
                 "[\\xd0-\\xdf].",
@@ -86,6 +86,21 @@
             "descriptions": [
                 "B - T1 - Not permitted in IT block. - Variant: ARMv4T, ARMv5T*, ARMv6*, ARMv7",
                 "B.W - T3 - Not permitted in IT block. - Variant: ARMv6T2, ARMv7"
+            ]
+        },
+        "bl-func": {
+            "endian": "BE",
+            "regex": [
+                "[\\xf0-\\xf7].[\\xf0-\\xff\\xd0-\\xdf]."
+            ],
+            "format": [
+                "\\xf0\\x00\\xd0\\x00"
+            ],
+            "mask": [
+                "\\xf8\\x00\\xd0\\x00"
+            ],
+            "descriptions": [
+                "BL - T1 - Branch with Link calls a subroutine at a PC-relative address."
             ]
         },
         "mov": {
@@ -178,11 +193,11 @@
         },
         "INNER_BLOCK_PAIRS": {
             "IT": [{
-                "ins": ["cmp", "b"],
+                "ins": ["cmp", "b-it"],
                 "features": {
                     "distance": [
                         "cmp",
-                        "b",
+                        "b-it",
                         1
                     ]
                 }

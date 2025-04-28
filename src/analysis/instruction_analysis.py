@@ -2,12 +2,11 @@ import re
 import json
 import capstone as cps
 
-
-from eval.calc import calc_BlockRates, calc_BlockPairInstrRates
-from analysis.branch_analysis import call_instruction_branch_addr as get_branch_addr
+from evaluate.calc import calc_BlockRates, calc_BlockPairInstrRates
+from utils.config_processor import features_configure_init
 from utils.translator import hexString2bytes, string2bytes_regex
 from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
-from utils.config_processor import features_configure_init
+from analysis.branch_analysis import call_instruction_branch_addr as get_branch_addr
 
 
 PROCESSOR_ARCHITECTURES = {
@@ -312,7 +311,6 @@ class BinaryAnalyzer:
                 for blk_index in blk_filter.reversed_ht_vaild_blocks:
                     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
 
-
     def analyzing(self):
         for arch in self.supported_arch.keys():
             arch = arch.upper()
@@ -332,7 +330,6 @@ class BinaryAnalyzer:
             else:
                 print(f'-------------------- {arch}:{supported_endian} --------------------')
                 self.archAnalysis(isa_arch=arch, endian=supported_endian, ins_pair_dict=ins_pair_dict)
-
 
 
 ############################# 指令搜索算法 #############################
