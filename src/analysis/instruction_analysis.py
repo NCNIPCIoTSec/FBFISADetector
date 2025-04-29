@@ -30,22 +30,23 @@ class BinaryBlock:
     - 代码块内分析：  
       - FUNC-1. 获取指令对关系：获取所有块内指令对；  
     '''
-    arch = None
-    inner_pairs_dict = {}
-    instructions_info = {}
+    arch: str = None
+    inner_pairs_list: list = None
+    instructions_info: dict = {}
     complete_binary = b''
 
     @classmethod
-    def loadConfigureInfo(cls, arch: str, inner_pairs_dict: dict, instructions_info: dict):
+    def loadConfigureInfo(cls, arch: str, inner_pairs_list: dict, instructions_info: dict):
         """
         获取类的相关配置信息
         """
         cls.arch = arch.upper()
-        cls.inner_pairs_dict = inner_pairs_dict
+        cls.inner_pairs_list = inner_pairs_list
         cls.instructions_info = instructions_info
         # 其他参数
         cls.reverse_unit = 2  # 字节序反转，按多少字节反转
         cls.min_ins_length = 2  # 指令字最短的指令占多少字节长度
+        cls.max_ins_length = 4
         cls.alignment_bytes = 2  # 指令对齐字节长度
         if arch == 'ARM':
             pass
@@ -65,7 +66,17 @@ class BinaryBlock:
         if self.arch is None:
             print("[BinaryBlock Class Exception] Please Load Class Configuration information first, and then initialize this object...")
             raise Exception
-        def instr_preprocess(instr: str) -> set[str]:
+        # 创建对象，配置其信息
+        self.endian = endian.upper()
+        self.head_instr, self.tail_instr = self.instr_preprocess(block_pair_instr[0]), self.instr_preprocess(block_pair_instr[1])
+        self.block_pair = block_pair_data
+        # 输出结果记录
+        self.high_frequency_instr: list = []
+        self.is_valid_block: bool = None  # record final judgement result - Boolean
+        self.inner_pairs: list = []  # record pairs found by func-get_inner_block_pairs
+        self.disassemble_record: dict = {"capstone_arch": None, "capstone_mode": None, "offset": None}  # record disassemble args result from capstone
+
+    def instr_preprocess(self, instr: str) -> set[str]:
             '''
             添加一些预处理操作，处理call指令跳转和指令名称的问题
             '''
@@ -80,25 +91,20 @@ class BinaryBlock:
                     raise Exception
                 for des in all_descriptions:
                     original_ins = des.split('-')[0].strip()
-                    instr_class.add(original_ins.lower())
+                    for eins in original_ins.split(";"):
+                        instr_class.add(eins.strip().lower())
 
             return instr_class
-        # 创建对象，配置其信息
-        self.endian = endian.upper()
-        self.head_instr, self.tail_instr = instr_preprocess(block_pair_instr[0]), instr_preprocess(block_pair_instr[1])
-        self.block_pair = block_pair_data
-        # 输出结果记录
-        self.high_frequency_instr: list = []
-        self.is_valid_block: bool = None  # record final judgement result - Boolean
-        self.other_pairs = dict()  # record pairs found by func-get_inner_block_pairs
-        self.disassemble_record = {"capstone_arch": None, "capstone_mode": None, "offset": None}  # record disassemble args result from capstone
-
-    def isReversedHeadTailValid(self) -> bool:
+    
+    def isReversedPairsValid(self) -> bool:
         """
         线性扫描逆向分析算法来分析“可能”为函数块
         """
         # 如果是CAPSTONE不支持的架构，不做过滤
         if PROCESSOR_ARCHITECTURES.get(self.arch) is None:
+            return True
+        # 如果指令长度固定，不做处理
+        if self.min_ins_length == self.max_ins_length:
             return True
 
         # print(self.binary.hex())
@@ -109,21 +115,35 @@ class BinaryBlock:
             offset = 0x08000000
         elif self.arch == 'TRICORE':
             offset = 0x80000000
+        block_offset = offset + self.block_pair[0][1]
+        
+        # For Inner Pairs Check
+        inner_pairs_addr = {}
+        for pair_info in self.inner_pairs:
+            ins1, ins2 = pair_info["ins"]
+            for pair in pair_info["details"]:
+                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
+                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
+        # print(inner_pairs_addr)
+
         # 反汇编分析：线性扫描算法
         flag = False
         for cs_mode in capstone_arguments['MODES']:
             cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
             md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
-            reverse_res = [
-                (ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()) 
-                for ins in md.disasm(
-                    code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], 
-                    offset=offset)
-            ]
+            reverse_res = []
+            for ins in md.disasm(code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], offset=block_offset):
+                ins_addr, ins_bytes, ins_mnemonic, ins_op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
+                if (inner_instr_set := inner_pairs_addr.get(ins_addr)) is not None and ins_mnemonic not in inner_instr_set:
+                    # print(f"0x{ins_addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{ins_mnemonic}  {ins_op_str} | Exception is ({inner_instr_set})...")
+                    continue
+                reverse_res.append((ins_addr, ins_bytes, ins_mnemonic, ins_op_str))
+            # 首尾指令检测
             if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
                 self.disassemble_record["capstone_arch"] = capstone_arguments['ARCH']
                 self.disassemble_record["capstone_mode"] = cs_mode_with_endian
-                self.disassemble_record["offset"] = offset + self.block_pair[0][1]
+                self.disassemble_record["offset"] = block_offset
+                # 标记flag
                 flag = True
                 break
         return flag
@@ -134,42 +154,41 @@ class BinaryBlock:
         """
         # print(f'=== FUNC: {self.block_pair} ===')
         # 识别
-        for key in self.inner_pairs_dict.keys():
-            for cur_type_pair in self.inner_pairs_dict[key]:
-                ins1, ins2 = cur_type_pair["ins"]
-                possible_ins1, possible_ins2 = ins_pair_identify(
-                    ins1=ins1, 
-                    ins2=ins2, 
-                    endian=self.endian, 
-                    binary=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], 
-                    ins_dict={ins1: self.instructions_info[ins1], ins2: self.instructions_info[ins2]}, 
-                    reverse_unit=self.reverse_unit
-                )
-                # 筛掉不合理的指令，如起始地址为奇数的
-                possible_ins1 = [match_ins for match_ins in possible_ins1 if match_ins[1] % 2 == 0]
-                possible_ins2 = [match_ins for match_ins in possible_ins2 if match_ins[1] % 2 == 0]
-                # 若为空，则认为不存在本指令对儿
-                if len(possible_ins1) == 0 or len(possible_ins2) == 0:
-                    continue
-                # 特征识别 + 组对儿
-                cur_pairs = create_block_pair(
-                    ins_collection1=possible_ins1, 
-                    ins_collection2=possible_ins2, 
-                    features=features_configure_init(head_instr=ins1, tail_instr=ins2, features=cur_type_pair["features"]), 
-                    endian=self.endian, 
-                    reverse_unit=self.reverse_unit, 
-                    min_ins_length=self.min_ins_length,
-                    alignment_bytes=self.alignment_bytes
-                )
-                if len(cur_pairs) == 0:
-                    continue
-                # 记录
-                if self.other_pairs.get(key) is None:
-                    self.other_pairs[key] = []
-                content = {"ins": (ins1, ins2), "details": cur_pairs}
-                self.other_pairs[key].append(content)
+        for cur_type_pair in self.inner_pairs_list:
+            ins1, ins2 = cur_type_pair["ins"]
+            possible_ins1, possible_ins2 = ins_pair_identify(
+                ins1=ins1, 
+                ins2=ins2, 
+                endian=self.endian, 
+                binary=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], 
+                ins_dict={ins1: self.instructions_info[ins1], ins2: self.instructions_info[ins2]}, 
+                reverse_unit=self.reverse_unit
+            )
+            # 筛掉不合理的指令，如起始地址为奇数的
+            possible_ins1 = [match_ins for match_ins in possible_ins1 if match_ins[1] % 2 == 0]
+            possible_ins2 = [match_ins for match_ins in possible_ins2 if match_ins[1] % 2 == 0]
+            # 若为空，则认为不存在本指令对儿
+            if len(possible_ins1) == 0 or len(possible_ins2) == 0:
+                continue
+            # 特征识别 + 组对儿
+            cur_pairs = create_block_pair(
+                ins_collection1=possible_ins1, 
+                ins_collection2=possible_ins2, 
+                features=features_configure_init(head_instr=ins1, tail_instr=ins2, features=cur_type_pair["features"]), 
+                endian=self.endian, 
+                reverse_unit=self.reverse_unit, 
+                min_ins_length=self.min_ins_length,
+                alignment_bytes=self.alignment_bytes
+            )
+            if len(cur_pairs) == 0:
+                continue
+            # 记录
+            if self.inner_pairs is None:
+                self.inner_pairs = []
+            content = {"ins": (ins1, ins2), "type": cur_type_pair["type"], "details": cur_pairs}
+            self.inner_pairs.append(content)
         
-        return self.other_pairs
+        return self.inner_pairs
     
     def getBelongedFunctionBlock(self):
         '''
@@ -177,7 +196,7 @@ class BinaryBlock:
         '''
         # 如果当前的块未进行反汇编    
         if self.disassemble_record["capstone_arch"] is None and self.disassemble_record["capstone_mode"] is None:
-            if not self.isReversedHeadTailValid():  # 如果当前块无法进行正确地反汇编
+            if not self.isReversedPairsValid():  # 如果当前块反汇编后的与预估的指令对不对应，抛弃可能的不合理块
                 print("[Error] Block cannot be successfully reversed!")
                 return
         disassembler = cps.Cs(arch=self.disassemble_record["capstone_arch"], 
@@ -205,7 +224,7 @@ class BlocksFilter:
         return self.have_pairs_blocks
     
     def filterBlocksByHeadTailCheck(self) -> list[BinaryBlock]:
-        self.reversed_ht_vaild_blocks = [i for i, j in enumerate(self.have_pairs_blocks) if self.blocks[j].isReversedHeadTailValid()]
+        self.reversed_ht_vaild_blocks = [j for j in self.have_pairs_blocks if self.blocks[j].isReversedPairsValid()]
         return self.reversed_ht_vaild_blocks
 
 
@@ -244,72 +263,72 @@ class BinaryAnalyzer:
         BinaryBlock.loadCompleteBinary(binary=self.binary_res)
         BinaryBlock.loadConfigureInfo(
             arch=isa_arch, 
-            inner_pairs_dict=ins_pair_dict['PAIRS']['INNER_BLOCK_PAIRS'], 
+            inner_pairs_list=ins_pair_dict['PAIRS']['INNER_BLOCK_PAIRS'], 
             instructions_info=ins_pair_dict['INSTRUCTIONS']
         )
         
         # 从BLOCK中识别
-        for k, pair_ls in ins_pair_dict['PAIRS']['BLOCK_PAIRS'].items():
+        for bp in ins_pair_dict['PAIRS']['BLOCK_PAIRS']:
+            k = bp["type"]
             print(f"PROCESS BLOCK TYPE - {k}")
             address_length = ins_pair_dict['OTHERS']['MemoryArgs']['address_length']
             reverse_unit = ins_pair_dict['OTHERS']['MemoryArgs']['reverse_unit_size']
             min_instr_length = ins_pair_dict['OTHERS']['MemoryArgs']['min_instr_length']
             alignment_bytes_size = ins_pair_dict['OTHERS']['MemoryArgs']['alignment_size']
-            for bp in pair_ls:
-                # 获取信息
-                head_ins, tail_ins = bp['ins']
-                features = features_configure_init(head_ins, tail_ins, bp['features'])
-                # ======================================== <抽取指令对儿> ========================================
-                possible_block_head, possible_block_tail = ins_pair_identify(
-                    ins1=head_ins, ins2=tail_ins, 
-                    endian=endian, binary=self.binary_res, 
-                    ins_dict={head_ins: ins_pair_dict['INSTRUCTIONS'][head_ins], tail_ins: ins_pair_dict['INSTRUCTIONS'][tail_ins]}, 
-                    reverse_unit=reverse_unit
+            # 获取信息
+            head_ins, tail_ins = bp['ins']
+            features = features_configure_init(head_ins, tail_ins, bp['features'])
+            # ======================================== <抽取指令对儿> ========================================
+            possible_block_head, possible_block_tail = ins_pair_identify(
+                ins1=head_ins, ins2=tail_ins, 
+                endian=endian, binary=self.binary_res, 
+                ins_dict={head_ins: ins_pair_dict['INSTRUCTIONS'][head_ins], tail_ins: ins_pair_dict['INSTRUCTIONS'][tail_ins]}, 
+                reverse_unit=reverse_unit
+            )
+            # 评估
+            calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
+            # ======================================== <指令对儿组合> ========================================
+            # print([instr.hex() for instr, _, _ in possible_block_head])
+            if k == 'BRANCH':
+                if branch_calc_certain_arch is None:
+                    print(f"[BRACH-{head_ins}:{tail_ins}] Not Have Calculation-Expressions Recorded in Configuration-File...")
+                    continue
+                possible_block_head = call_instructions_rebuild(
+                    arch_info={
+                        "arch": isa_arch,
+                        "ins_tag": head_ins,
+                        "endian": endian,
+                        "reverse_unit": reverse_unit,
+                        "address_length": address_length
+                    },
+                    calc_info=branch_calc_certain_arch,
+                    call_instructions=possible_block_head,
+                    org_binary=self.binary_res
                 )
-                # 评估
-                calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
-                # ======================================== <指令对儿组合> ========================================
-                # print([instr.hex() for instr, _, _ in possible_block_head])
-                if k == 'BRANCH':
-                    if branch_calc_certain_arch is None:
-                        print(f"[BRACH-{head_ins}:{tail_ins}] Not Have Calculation-Expressions Recorded in Configuration-File...")
-                        continue
-                    possible_block_head = call_instructions_rebuild(
-                        arch_info={
-                            "arch": isa_arch,
-                            "ins_tag": head_ins,
-                            "endian": endian,
-                            "reverse_unit": reverse_unit,
-                            "address_length": address_length
-                        },
-                        calc_info=branch_calc_certain_arch,
-                        call_instructions=possible_block_head,
-                        org_binary=self.binary_res
-                    )
-                block_pairs = create_block_pair(
-                    arch = isa_arch,
-                    endian = endian,
-                    ins_collection1 = possible_block_head,
-                    ins_collection2 = possible_block_tail,
-                    reverse_unit = reverse_unit,
-                    min_ins_length = min_instr_length,
-                    alignment_bytes=alignment_bytes_size,
-                    features=features
+            block_pairs = create_block_pair(
+                arch = isa_arch,
+                endian = endian,
+                ins_collection1 = possible_block_head,
+                ins_collection2 = possible_block_tail,
+                reverse_unit = reverse_unit,
+                min_ins_length = min_instr_length,
+                alignment_bytes=alignment_bytes_size,
+                features=features
+            )
+            # ======================================== <BLOCK的创建于内部分析> ========================================
+            blocks = []
+            for block_pair in block_pairs:
+                blocks.append(
+                    BinaryBlock(endian=endian, block_pair_instr=(head_ins, tail_ins), block_pair_data=block_pair)
                 )
-                # ======================================== <BLOCK的创建于内部分析> ========================================
-                blocks = []
-                for block_pair in block_pairs:
-                    blocks.append(
-                        BinaryBlock(endian=endian, block_pair_instr=(head_ins, tail_ins), block_pair_data=block_pair)
-                    )
-                del block_pairs
-                blk_filter = BlocksFilter(blocks=blocks)
-                del blocks
-                # 评估
-                calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
-                # ======================================== <数据流分析> ========================================
-                for blk_index in blk_filter.reversed_ht_vaild_blocks:
-                    blk_filter.blocks[blk_index].getBelongedFunctionBlock()
+            del block_pairs
+            blk_filter = BlocksFilter(blocks=blocks)
+            del blocks
+            # 评估
+            calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
+            # ======================================== <数据流分析> ========================================
+            # for blk_index in blk_filter.reversed_ht_vaild_blocks:
+            #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
 
     def analyzing(self):
         for arch in self.supported_arch.keys():

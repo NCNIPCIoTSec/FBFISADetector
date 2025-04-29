@@ -98,21 +98,23 @@
                 "\\x00\\x00\\x00\\xff"
             ],
             "descriptions": [
-                "LD.B - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the byte value in the eight least-significant bits of data register D[a] to the byte memory location specified by the addressing mode.",
-                "LD.W - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the word value in data register D[a] to the memory location specified by the addressing mode."
+                "ST.B - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the byte value in the eight least-significant bits of data register D[a] to the byte memory location specified by the addressing mode.",
+                "ST.W - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the word value in data register D[a] to the memory location specified by the addressing mode."
             ]
         }
     },
     "PAIRS": {
-        "BLOCK_PAIRS":{
-            "BRANCH": [{
+        "BLOCK_PAIRS": [
+            {
                 "ins":["call-r-func", "ret"],
+                "type": "BRANCH",
                 "features":{}
-            }]
-        },
-        "INNER_BLOCK_PAIRS":{
-            "LONG_JMP_EA": [{
+            }
+        ],
+        "INNER_BLOCK_PAIRS": [
+            {
                 "ins":["movh.a", "lea"],
+                "type": "LONG_JMP_EA",
                 "features": {
                     "scope": [
                         "movh.a",
@@ -129,9 +131,10 @@
                         ]
                     ]
                 }
-            }],
-            "LOAD_DATA":[{
+            },
+            {
                 "ins":["movh.a", "ld.x"],
+                "type": "LOAD_DATA", 
                 "features":{
                     "distance":[
                         "movh.a",
@@ -147,9 +150,10 @@
                         ]
                     ]
                 }
-            }],
-            "STORE_DATA":[{
+            },
+            {
                 "ins":["movh.a", "st.x"],
+                "type": "STORE_DATA",
                 "features":{
                     "distance":[
                         "movh.a",
@@ -165,8 +169,8 @@
                         ]
                     ]
                 }
-            }]
-        }
+            }
+        ]
     },
     "OTHERS":{
         "HighUsage": [],
@@ -174,6 +178,7 @@
             "address_length": 4,
             "reverse_unit_size": 4,
             "min_instr_length": 2,
+            "max_instr_length": 4, 
             "alignment_size": 2
         },
         "SupportedEndian": "LE"

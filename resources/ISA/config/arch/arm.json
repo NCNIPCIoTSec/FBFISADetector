@@ -84,8 +84,8 @@
                 "\\xf8\\x00\\xd0\\x00"
             ],
             "descriptions": [
-                "B - T1 - Not permitted in IT block. - Variant: ARMv4T, ARMv5T*, ARMv6*, ARMv7",
-                "B.W - T3 - Not permitted in IT block. - Variant: ARMv6T2, ARMv7"
+                "BNE;BEQ;BCS;BHS;BCC;BLO;BMI;BPL;BVS;BVC;BHI;BLS;BGE;BLT;BGT;BLE - T1 - Not permitted in IT block. - Variant: ARMv4T, ARMv5T*, ARMv6*, ARMv7",
+                "BNE.W;BEQ.W;BCS.W;BHS.W;BCC.W;BLO.W;BMI.W;BPL.W;BVS.W;BVC.W;BHI.W;BLS.W;BGE.W;BLT.W;BGT.W;BLE.W - T3 - Not permitted in IT block. - Variant: ARMv6T2, ARMv7"
             ]
         },
         "bl-func": {
@@ -175,9 +175,10 @@
         }
     },
     "PAIRS": {
-        "BLOCK_PAIRS": {
-            "ARGS_SAVE": [{   
+        "BLOCK_PAIRS": [
+            {   
                 "ins":["push", "pop"],
+                "type": "ARGS_SAVE",
                 "features":{
                     "register":[
                         "push",
@@ -189,11 +190,12 @@
                         ]
                     ]
                 }
-            }]
-        },
-        "INNER_BLOCK_PAIRS": {
-            "IT": [{
+            }
+        ],
+        "INNER_BLOCK_PAIRS": [
+            {
                 "ins": ["cmp", "b-it"],
+                "type": "IT",
                 "features": {
                     "distance": [
                         "cmp",
@@ -201,8 +203,8 @@
                         1
                     ]
                 }
-            }]
-        }
+            }
+        ]
     },
     "OTHERS": {
         "HighUsage": ["mov", "str"],
@@ -210,6 +212,7 @@
             "address_length": 4,
             "reverse_unit_size": 2,
             "min_instr_length": 2,
+            "max_instr_length": 4, 
             "alignment_size": 2
         },
         "SupportedEndian": "*"

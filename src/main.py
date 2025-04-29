@@ -50,6 +50,11 @@ def main():
     ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin')
     ba.analyzing()
 
+    print("\n\n ======================== <TRICORE:TC1797_FLASH.bin> ========================")
+    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/TC1797_FLASH.bin')
+    ba.analyzing()
+
+
     # for arch in os.listdir(demo_dir):
     #     for demo in os.listdir(demo_dir+f'{arch}/bin/'):
     #         file_path = demo_dir+f'{arch}/bin/'+demo
