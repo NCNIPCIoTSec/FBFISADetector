@@ -1,0 +1,141 @@
+{
+    "INSTRUCTIONS": {
+        "sw-ra": {
+            "endian": "be",
+            "regex": [
+                "[\\xac-\\xaf]..."
+            ],
+            "format": [
+                "\\xac\\x1f\\x00\\x00"
+            ],
+            "mask": [
+                "\\xfc\\x1f\\x00\\x00"
+            ],
+            "descriptions": [
+                "SW - sw ra, local_i(xx) - The least-significant 32-bit word of GPR rt is  stored  in  memory  at  the  location  specified  by  the  aligned  effective address. The 16-bit signed offset is added to the contents of GPR base to form the effective address. - Variant: MIPS32"
+            ]
+        },
+        "jr-ra": {
+            "endian": "be",
+            "regex": [
+                "\\x03\\xe0\\x00\\x08"
+            ],
+            "format": [
+                "\\x03\\xe0\\x00\\x08"
+            ],
+            "mask": [
+                "\\xff\\xff\\xff\\xff"
+            ],
+            "descriptions": [
+                "JR - jr ra - Jump to the effective target address in GPR rs. Execute the instruction following the jump, in the branch delay slot, before jumping. - Variant: MIPS32"
+            ]
+        },
+        "bne": {
+            "endian": "be",
+            "regex": [
+                "[\\x14-\\x17]..."
+            ],
+            "format": [
+                "\\x14\\x00\\x00\\x00"
+            ],
+            "mask": [
+                "\\xfc\\x00\\x00\\x00"
+            ],
+            "descriptions": [
+                "BNE - bne rs, rt, offset - An 18-bit signed offset (the 16-bit offset field shifted left 2 bits) is added to the address of the instruction following the branch (not the branch itself), in the branch delay slot, to form a PC-relative effective target address. If the contents of GPR rs and GPR rt are not equal, branch to the effective target address after the instruction in the delay slot is executed. - Variant: MIPS32"
+            ]
+        },
+        "lw": {
+            "endian": "be",
+            "regex": [
+                "[\\x8c-\\x8f]..."
+            ],
+            "format": [
+                "\\x8c\\x00\\x00\\x00"
+            ],
+            "mask": [
+                "\\xfc\\x00\\x00\\x00"
+            ],
+            "descriptions": [
+                "LW - lw rt, offset(base) - The contents of the 32-bit word at the memory location specified by the aligned effective address are fetched, sign-extended to the GPR register length if necessary, and placed in GPR rt. The 16-bit signed offset is added to the contents of GPR base to form the effective address - Variant: MIPS32"
+            ]
+        },
+        "beq": {
+            "endian": "be",
+            "regex": [
+                "[\\x10-\\x13]..."
+            ],
+            "format": [
+                "\\x10\\x00\\x00\\x00"
+            ],
+            "mask": [
+                "\\xfc\\x00\\x00\\x00"
+            ],      
+            "descriptions": [
+                "BEQ - beq rs, rt, offset - An 18-bit signed offset (the 16-bit offset field shifted left 2 bits) is added to the address of the instruction following the branch (not the branch itself), in the branch delay slot, to form a PC-relative effective target address. If the contents of GPR rs and GPR rt are equal, branch to the effective target address after the instruction in the delay slot is executed - Variant: MIPS32"
+            ]
+        }
+    },
+    "PAIRS": {
+        "BLOCK_PAIRS": [
+            {
+                "ins": ["sw-ra", "jr-ra"],
+                "type": "ARGS_SAVE",
+                "features": {
+                    "register": [
+                        "sw",
+                        "jr",
+                        "BE",
+                        [
+                            ["\\x00\\x1f\\x00\\x00"],
+                            ["\\x03\\xe0\\x00\\x00"]
+                        ]
+                    ]
+                }
+            }
+        ],
+        "INNER_BLOCK_PAIRS": [
+            {
+                "ins": ["lw", "bne"],
+                "type": "IT",
+                "features":{
+                    "register":[
+                        "lw",
+                        "bne",
+                        "BE",
+                        [
+                            ["\\x00\\x1f\\x00\\x00"],
+                            ["\\x03\\xe0\\x00\\x00"]
+                        ]
+                    ]
+                }
+            },
+            {
+                "ins": ["lw", "beq"],
+                "type": "IT",
+                "features":{
+                    "register":[
+                        "lw",
+                        "beq",
+                        "BE",
+                        [
+                            ["\\x00\\x1f\\x00\\x00"],
+                            ["\\x03\\xe0\\x00\\x00"]
+                        ]
+                    ]
+                }
+            }
+        ]
+    },
+    "OTHERS": {
+        "HighUsage": [],
+        "MemoryArgs": {
+            "address_length": 4,
+            "reverse_unit_size": 4,
+            "min_instr_length": 4, 
+            "max_instr_length": 4,
+            "alignment_size": 4
+        },
+        "SupportedEndian": "be"
+    }
+}

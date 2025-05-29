@@ -1,12 +1,13 @@
 import re
 import json
 import capstone as cps
+from multiprocessing import Pool, cpu_count
 
 from evaluate.calc import calc_BlockRates, calc_BlockPairInstrRates
 from utils.config_processor import features_configure_init
 from utils.translator import hexString2bytes, string2bytes_regex
 from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
-from analysis.branch_analysis import call_instruction_branch_addr as get_branch_addr
+from analysis.branch_analysis import get_branch_addr_multiprocessing
 
 
 PROCESSOR_ARCHITECTURES = {
@@ -87,7 +88,7 @@ class BinaryBlock:
             else:
                 all_descriptions: list[str] = self.instructions_info[instr].get("descriptions")
                 if all_descriptions is None:
-                    print(f"[ERROR] <ARCH={self.arch}> Configure File with instrunction '{instr}' has no descriptions information!")
+                    print(f"[ERROR] <ARCH={self.arch}> Configure File with instruction '{instr}' has no descriptions information!")
                     raise Exception
                 for des in all_descriptions:
                     original_ins = des.split('-')[0].strip()
@@ -217,15 +218,15 @@ class BlocksFilter:
     def __init__(self, blocks: list[BinaryBlock]):
         self.blocks = blocks
         self.have_pairs_blocks = []
-        self.reversed_ht_vaild_blocks = []
+        self.reversed_ht_valid_blocks = []
 
     def filterBlocksByInnerPairs(self) -> list[BinaryBlock]:
         self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
         return self.have_pairs_blocks
     
     def filterBlocksByHeadTailCheck(self) -> list[BinaryBlock]:
-        self.reversed_ht_vaild_blocks = [j for j in self.have_pairs_blocks if self.blocks[j].isReversedPairsValid()]
-        return self.reversed_ht_vaild_blocks
+        self.reversed_ht_valid_blocks = [j for j in self.have_pairs_blocks if self.blocks[j].isReversedPairsValid()]
+        return self.reversed_ht_valid_blocks
 
 
 class BinaryAnalyzer:
@@ -327,7 +328,7 @@ class BinaryAnalyzer:
             # 评估
             calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
             # ======================================== <数据流分析> ========================================
-            # for blk_index in blk_filter.reversed_ht_vaild_blocks:
+            # for blk_index in blk_filter.reversed_ht_valid_blocks:
             #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
 
     def analyzing(self):
@@ -338,6 +339,9 @@ class BinaryAnalyzer:
             ins_pair_dict = dict()
             with open(file=self.supported_arch.get(arch), mode='r', encoding='utf-8') as fr:
                 ins_pair_dict = json.load(fp=fr)
+            # 配置文件信息不完善，PASS
+            if ins_pair_dict.get("INSTRUCTIONS") is None or ins_pair_dict.get("PAIRS") is None or ins_pair_dict.get("OTHERS") is None:
+                continue
             supported_endian = ins_pair_dict['OTHERS']['SupportedEndian'].upper()
             # pprint.pprint(ins_pair_dict)
             # 分析
@@ -437,6 +441,7 @@ def call_instructions_rebuild(arch_info: dict, calc_info: dict, call_instruction
     endian = arch_info['endian']  # 指令字节序
     reverse_unit = arch_info['reverse_unit']  # 指令对齐（用于处理字节序变换）
     address_bytes = arch_info["address_length"]  # 用于返回地址长度大小（32/64位）
+    args_records = []
     for i, call_ins in enumerate(call_instructions):
         call_bytes, ins_start = bytes(call_ins[0]), int(call_ins[1])
         # print(f" ===> NUM{i}-CALL-INS:{call_bytes.hex()} <===")
@@ -445,25 +450,33 @@ def call_instructions_rebuild(arch_info: dict, calc_info: dict, call_instruction
             # 从存储变量中获取函数参数
             bits_map = calc_info[expr_tag]["bits_map"]  # 二进制比特串“位置n - 位置x”代表的什么？设置变量
             expressions = [tuple(l) for l in calc_info[expr_tag]["expressions"]]  # 通过变量表达式来求解目的地址
-            # 目标地址
-            try:
-                target_address = get_branch_addr(
-                    pc=ins_start, call_ins=call_bytes, 
-                    endian=endian, reverse_unit=reverse_unit, address_bytes=address_bytes,
-                    var_map=bits_map, calc_method=expressions
-                )
-            except ValueError as e:
-                # print(f"[NUM{i}-ERROR] <pc={hex(ins_start)} | ins={call_bytes.hex()}> - Invalid Offset Value!")
-                continue
-            # 目的地址的筛选
-            if 0 <= target_address < len(org_binary) - len(call_bytes):
-                # print(f"[NUM{i}] (CALL ADDR)", ins_start, "=", f"{ins_start.to_bytes(length=arch_info["address_length"], byteorder='big').hex()}==>{target_address.hex()}", "=", tg_addr, "(TARGET ADDR)")
-                # 目标地址后的二进制内容分析：
-                end_tg_addr = target_address + len(call_bytes)
-                target_addr_instr.append((len(call_bytes)*b'\xff', target_address, end_tg_addr))
-                # if test_codes != b'':
-                #     print(f"[NUM{i}] TARGET ADDR INSTRUCTIONS(12bytes):", test_codes.hex())
+
+            args_records.append({'pc': ins_start,'instruction': call_bytes,'endian': endian,'reverse_unit': reverse_unit,'var_map': bits_map,'calc_method': expressions,'address_bytes': address_bytes})
     
+    # 使用进程池计算
+    target_address_res = []
+    with Pool(processes=cpu_count()) as pool:
+        # 目标地址 
+        # target_address = call_instruction_branch_addr(
+        #             pc=ins_start, call_ins=call_bytes, 
+        #             endian=endian, reverse_unit=reverse_unit, address_bytes=address_bytes,
+        #             var_map=bits_map, calc_method=expressions
+        # )
+        target_address_res = pool.map(get_branch_addr_multiprocessing, args_records)
+
+    # 目标地址的筛选
+    for i, target_address in enumerate(target_address_res):
+        if target_address is None:
+            continue
+        call_bytes = args_records[i]['instruction']
+        # 目的地址的筛选
+        if 0 <= target_address < len(org_binary) - len(call_bytes):
+            # print(f"[NUM{i}] (CALL ADDR)", ins_start, "=", f"{ins_start.to_bytes(length=arch_info["address_length"], byteorder='big').hex()}==>{target_address.hex()}", "=", tg_addr, "(TARGET ADDR)")
+            # 目标地址后的二进制内容分析：
+            end_tg_addr = target_address + len(call_bytes)
+            target_addr_instr.append((len(call_bytes)*b'\xff', target_address, end_tg_addr))
+            # if test_codes != b'':
+            #     print(f"[NUM{i}] TARGET ADDR INSTRUCTIONS(12bytes):", test_codes.hex())
     return target_addr_instr
 
 

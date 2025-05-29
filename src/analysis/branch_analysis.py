@@ -4,6 +4,39 @@ import sympy as sp
 from utils.bytes_op import bytes_reverse, bit_string2bytes, bytes2bit_string
 
 
+def get_branch_addr_multiprocessing(instr_info: dict):
+    '''
+    多进程计算分支地址
+    - 输入：
+      - instr_info: dict, 包含函数调用指令信息的字典，形如：
+        {
+            'pc': Any,  # 函数调用指令的地址，要求int类型/bytes类型
+            'instruction': bytes,  # 函数调用指令
+            'endian': str,  # 指令的字节序
+            'reverse_unit': int,  # 对齐字节数
+            'var_map': dict,  # 变量字典，形如{var_name: [bit_start, bit_end]}
+            'calc_method': list[tuple],  # 计算分支地址方法，形如[('a', 'offset = imm32 + 4')]
+            'address_bytes': int  # 输出地址字节长度。当pc为bytes时，默认长度等于len(pc)；当pc为int时，默认位8字节（64位）
+        }
+    - 输出：
+      - bytes, 分支函数的起始地址
+    '''
+    try:
+        res = call_instruction_branch_addr(
+            pc=instr_info['pc'], 
+            call_ins=instr_info['instruction'], 
+            endian=instr_info['endian'], 
+            reverse_unit=instr_info['reverse_unit'], 
+            var_map=instr_info['var_map'], 
+            calc_method=instr_info['calc_method'],
+            address_bytes=instr_info['address_bytes']
+        )
+    except ValueError as e:
+        return None
+    finally:
+        return res
+
+
 def call_instruction_branch_addr(pc: any, call_ins: bytes, endian: str, reverse_unit: int, var_map: dict, calc_method: list[tuple], address_bytes: int = 8):
     '''
     根据函数调用指令中的绝对/相对地址，计算分支函数的起始地址；  
@@ -62,7 +95,7 @@ def call_instruction_branch_addr(pc: any, call_ins: bytes, endian: str, reverse_
     # print(f"偏移量: {offset}")
     if offset == 0:
         # print("计算偏移量错误！")
-        raise ValueError
+        return None
     # 计算分支地址
     return int(int.from_bytes(pc, byteorder='big') + offset)
     

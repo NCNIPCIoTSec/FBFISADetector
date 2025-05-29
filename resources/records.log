@@ -2,6 +2,17 @@
 
  ======================== <ARM:FreeRTOS_ThreadCreation> ========================
 
+=> MIPS
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 4 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.11189%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
 => TRICORE
 -------------------- TRICORE:LE --------------------
 PROCESS BLOCK TYPE - BRANCH
@@ -34,7 +45,63 @@ Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that
         3 |                             0 |               0 |                              0.00% |                                                           0.00%
 
 
+ ======================== <MIPS:busybox_0x0.bin> ========================
+
+=> MIPS
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 451 | JR-RA: 452
+      PAIR_RATE =  0.22%
+HEAD BYTES_RATE =  0.04046%
+TAIL BYTES_RATE =  0.04055%
+POSSIBLE CALL INS NUMBERS: 451
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      389 |                           159 |             159 |                             40.87% |                                                         100.00%
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 1099 | RET: 294
+      PAIR_RATE =  73.25%
+HEAD BYTES_RATE =  0.08645%
+TAIL BYTES_RATE =  0.01319%
+POSSIBLE CALL INS NUMBERS: 1099
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       59 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 270 | POP: 940
+      PAIR_RATE =  71.28%
+HEAD BYTES_RATE =  0.01211%
+TAIL BYTES_RATE =  0.04217%
+POSSIBLE CALL INS NUMBERS: 270
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        2 |                             1 |               0 |                             50.00% |                                                           0.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 270 | POP: 940
+      PAIR_RATE =  71.28%
+HEAD BYTES_RATE =  0.01211%
+TAIL BYTES_RATE =  0.04217%
+POSSIBLE CALL INS NUMBERS: 270
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       98 |                             1 |               0 |                              1.02% |                                                           0.00%
+
+
  ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================
+
+=> MIPS
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 1 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00019%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 1
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
 
 => TRICORE
 -------------------- TRICORE:LE --------------------
@@ -66,37 +133,3 @@ TAIL BYTES_RATE =  0.00039%
 POSSIBLE CALL INS NUMBERS: 1
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 
-
-
- ======================== <TRICORE:TC1797_FLASH.bin> ========================
-
-=> TRICORE
--------------------- TRICORE:LE --------------------
-PROCESS BLOCK TYPE - BRANCH
-CALL-R-FUNC: 27375 | RET: 18518
-      PAIR_RATE =  32.35%
-HEAD BYTES_RATE =  2.43831%
-TAIL BYTES_RATE =  0.88301%
-POSSIBLE CALL INS NUMBERS: 27375
-Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-     3992 |                          1784 |            1597 |                             44.69% |                                                          89.52%
-
-=> ARM
--------------------- ARM:LE --------------------
-PROCESS BLOCK TYPE - ARGS_SAVE
-PUSH: 1059 | POP: 980
-      PAIR_RATE =  7.46%
-HEAD BYTES_RATE =  0.05050%
-TAIL BYTES_RATE =  0.04673%
-POSSIBLE CALL INS NUMBERS: 1059
-Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-       71 |                            18 |               1 |                             25.35% |                                                           5.56%
--------------------- ARM:BE --------------------
-PROCESS BLOCK TYPE - ARGS_SAVE
-PUSH: 1059 | POP: 980
-      PAIR_RATE =  7.46%
-HEAD BYTES_RATE =  0.05050%
-TAIL BYTES_RATE =  0.04673%
-POSSIBLE CALL INS NUMBERS: 1059
-Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-       61 |                            10 |               2 |                             16.39% |                                                          20.00%

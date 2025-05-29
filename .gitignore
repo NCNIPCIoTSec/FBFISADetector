@@ -1,8 +1,10 @@
-/requirements/*
 /resources/tmp*
 /src/demo.py
 
-/.history/
-/.vscode/
-/.idea/
-/resources/data/
+/.history
+/.vscode
+/.idea
+/relative_works/workspace
+/resources/data/firmwares
+
+/requirements/!README.md
