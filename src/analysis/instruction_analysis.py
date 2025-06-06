@@ -109,7 +109,8 @@ class BinaryBlock:
         self.high_frequency_instr: list = []
         self.is_valid_block: bool = None  # record final judgement result - Boolean
         self.inner_pairs: list = []  # record pairs found by func-get_inner_block_pairs
-        self.disassemble_record: dict = {"capstone_arch": None, "capstone_mode": None, "offset": None}  # record disassemble args result from capstone
+        self.capstone_record: dict = {"capstone_arch": None, "capstone_mode": None, "offset": None}  # record disassemble args result from capstone
+        self.ghidra_record: dict = {"ghidra_arch": None, "offset": None}  # record disassemble args result from ghidra
 
     def instr_preprocess(self, instr: str) -> set[str]:
             '''
@@ -186,7 +187,7 @@ class BinaryBlock:
     
     def isGhidraReversedPairsValid(self) -> bool:
         '''
-        使用Ghidra的P-Code进行分析
+        Ghidra 线性扫描逆向分析算法来分析“可能”为函数块
         '''
         # 如果指令长度固定，不做处理
         if self.min_ins_length == self.max_ins_length:
@@ -222,7 +223,12 @@ class BinaryBlock:
         for isa_var in isa_variants:
             ctx= pypcode.Context(isa_var)
             # 反汇编分析：线性扫描算法
-            disasm_result = ctx.disassemble(analyzing_bytes, block_offset)
+            disasm_result = None
+            try:
+                disasm_result = ctx.disassemble(analyzing_bytes, block_offset)
+            except Exception as e:
+                # print(f"[ERROR] <ARCH={self.arch}> <ISA={isa_var}> Disassemble failed: {e}")
+                continue
             # 逆向结果分析
             reverse_res = []
             for instr in disasm_result.instructions:
@@ -233,10 +239,31 @@ class BinaryBlock:
                     break
                 reverse_res.append((instr_addr, instr_mnemonic, instr_op_str))
             if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][1] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][1] in self.tail_instr):
+                self.ghidra_record["ghidra_arch"] = isa_var
+                self.ghidra_record["offset"] = block_offset
                 flag = True
                 break
 
         return flag
+
+    def getBelongedFunctionBlock(self):
+        '''
+        当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
+        '''
+        if self.ghidra_record.get("ghidra_arch") is None:
+            print("[ERROR] <ARCH={self.arch}> Please check whether the block is a valid function block...")
+            return None
+        ctx = pypcode.Context(self.ghidra_record["ghidra_arch"])
+        try:
+            ghidra_disam = ctx.disassemble(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], self.ghidra_record["offset"])
+            print(ghidra_disam)
+            print("+" * 150)
+            ghidra_ir = ctx.translate(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], self.ghidra_record["offset"])
+            print(ghidra_ir)
+            print("=" * 150)
+        except Exception as e:
+            print(f"[ERROR] <ARCH={self.arch}> Disassemble/Translate failed: {e}")
+            return None
 
     def getInnerBlockPairs(self): 
         """
@@ -279,25 +306,6 @@ class BinaryBlock:
             self.inner_pairs.append(content)
         
         return self.inner_pairs
-    
-    def getBelongedFunctionBlock(self):
-        '''
-        当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
-        '''
-        # 如果当前的块未进行反汇编    
-        if self.disassemble_record["capstone_arch"] is None and self.disassemble_record["capstone_mode"] is None:
-            if not self.isCapstoneReversedPairsValid():  # 如果当前块反汇编后的与预估的指令对不对应，抛弃可能的不合理块
-                print("[Error] Block cannot be successfully reversed!")
-                return
-        disassembler = cps.Cs(arch=self.disassemble_record["capstone_arch"], 
-                              mode=self.disassemble_record["capstone_mode"])
-
-        start, end = self.block_pair[0][1], self.block_pair[1][2]
-        disasm_iter = disassembler.disasm(code=self.complete_binary[start:end], offset=self.disassemble_record["offset"])
-        print("==> REVERSing: ")
-        for ins in disasm_iter:
-            addr, ins_bytes, mnemonic, op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
-            print(f"0x{addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{mnemonic}  {op_str}")
     
 
 class BlocksFilter:

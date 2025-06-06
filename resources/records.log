@@ -1,60 +1,60 @@
 
 
- ======================== <ARM:FreeRTOS_ThreadCreation> ========================
+ ======================== <mips:helloworld_be_mips_r3000_0x0.bin> ========================
 
 => MIPS
 -------------------- MIPS:LE --------------------
 PROCESS BLOCK TYPE - ARGS_SAVE
 SW-RA: 1 | JR-RA: 0
       PAIR_RATE =  100.00%
-HEAD BYTES_RATE =  0.02797%
+HEAD BYTES_RATE =  0.00009%
 TAIL BYTES_RATE =  0.00000%
 POSSIBLE CALL INS NUMBERS: 1
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 
 -------------------- MIPS:BE --------------------
 PROCESS BLOCK TYPE - ARGS_SAVE
-SW-RA: 4 | JR-RA: 0
-      PAIR_RATE =  100.00%
-HEAD BYTES_RATE =  0.11189%
-TAIL BYTES_RATE =  0.00000%
-POSSIBLE CALL INS NUMBERS: 4
+SW-RA: 6 | JR-RA: 10
+      PAIR_RATE =  40.00%
+HEAD BYTES_RATE =  0.00056%
+TAIL BYTES_RATE =  0.00094%
+POSSIBLE CALL INS NUMBERS: 6
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+        6 |                             3 |               3 |                             50.00% |                                                         100.00%
 
 => TRICORE
 -------------------- TRICORE:LE --------------------
 PROCESS BLOCK TYPE - BRANCH
-CALL-R-FUNC: 12 | RET: 6
-      PAIR_RATE =  50.00%
-HEAD BYTES_RATE =  0.20979%
-TAIL BYTES_RATE =  0.08392%
-POSSIBLE CALL INS NUMBERS: 12
+CALL-R-FUNC: 3 | RET: 3
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00023%
+TAIL BYTES_RATE =  0.00014%
+POSSIBLE CALL INS NUMBERS: 3
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-        3 |                             0 |               0 |                              0.00% |                                                           0.00%
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
 
 => ARM
 -------------------- ARM:LE --------------------
 PROCESS BLOCK TYPE - ARGS_SAVE
-PUSH: 54 | POP: 134
-      PAIR_RATE =  59.70%
-HEAD BYTES_RATE =  0.78322%
-TAIL BYTES_RATE =  1.90210%
-POSSIBLE CALL INS NUMBERS: 54
+PUSH: 2 | POP: 16
+      PAIR_RATE =  87.50%
+HEAD BYTES_RATE =  0.00009%
+TAIL BYTES_RATE =  0.00075%
+POSSIBLE CALL INS NUMBERS: 2
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-       48 |                            32 |              32 |                             66.67% |                                                         100.00%
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
 -------------------- ARM:BE --------------------
 PROCESS BLOCK TYPE - ARGS_SAVE
-PUSH: 52 | POP: 132
-      PAIR_RATE =  60.61%
-HEAD BYTES_RATE =  0.72727%
-TAIL BYTES_RATE =  1.84615%
-POSSIBLE CALL INS NUMBERS: 52
+PUSH: 2 | POP: 16
+      PAIR_RATE =  87.50%
+HEAD BYTES_RATE =  0.00009%
+TAIL BYTES_RATE =  0.00075%
+POSSIBLE CALL INS NUMBERS: 2
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
-        3 |                             0 |               0 |                              0.00% |                                                           0.00%
+        1 |                             0 |               0 |                              0.00% |                                                           0.00%
 
 
- ======================== <MIPS:busybox_0x0.bin> ========================
+ ======================== <mips:busybox_0x0.bin> ========================
 
 => MIPS
 -------------------- MIPS:LE --------------------
@@ -108,7 +108,1087 @@ Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that
        98 |                             1 |               0 |                              1.02% |                                                           0.00%
 
 
- ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================
+ ======================== <arm:example_nordic.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 1 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.08937%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 1
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 8 | RET: 5
+      PAIR_RATE =  37.50%
+HEAD BYTES_RATE =  0.49151%
+TAIL BYTES_RATE =  0.22341%
+POSSIBLE CALL INS NUMBERS: 8
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        2 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 10 | POP: 12
+      PAIR_RATE =  16.67%
+HEAD BYTES_RATE =  0.53619%
+TAIL BYTES_RATE =  0.67024%
+POSSIBLE CALL INS NUMBERS: 10
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        5 |                             3 |               3 |                             60.00% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 8 | POP: 9
+      PAIR_RATE =  11.11%
+HEAD BYTES_RATE =  0.35746%
+TAIL BYTES_RATE =  0.40214%
+POSSIBLE CALL INS NUMBERS: 8
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+
+ ======================== <arm:ble5_project_zero_cc13x2r1lp_app_FlashROM_Release_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 13 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.03038%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 13
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 10 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02337%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 10
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 361 | RET: 491
+      PAIR_RATE =  26.48%
+HEAD BYTES_RATE =  0.69868%
+TAIL BYTES_RATE =  0.57367%
+POSSIBLE CALL INS NUMBERS: 361
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       80 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 888 | POP: 1532
+      PAIR_RATE =  42.04%
+HEAD BYTES_RATE =  1.28987%
+TAIL BYTES_RATE =  2.07618%
+POSSIBLE CALL INS NUMBERS: 888
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      597 |                           320 |             320 |                             53.60% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 672 | POP: 1287
+      PAIR_RATE =  47.79%
+HEAD BYTES_RATE =  0.78514%
+TAIL BYTES_RATE =  1.50368%
+POSSIBLE CALL INS NUMBERS: 672
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       21 |                             4 |               3 |                             19.05% |                                                          75.00%
+
+
+ ======================== <arm:ble5_simple_peripheral_oad_offchip_cc13x2r1lp_app_FlashROM_Release_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 7 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.01773%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 7
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 10 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02533%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 10
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 282 | RET: 387
+      PAIR_RATE =  27.13%
+HEAD BYTES_RATE =  0.56874%
+TAIL BYTES_RATE =  0.49021%
+POSSIBLE CALL INS NUMBERS: 282
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       59 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 864 | POP: 1430
+      PAIR_RATE =  39.58%
+HEAD BYTES_RATE =  1.34396%
+TAIL BYTES_RATE =  2.09130%
+POSSIBLE CALL INS NUMBERS: 864
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      584 |                           306 |             305 |                             52.40% |                                                          99.67%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 667 | POP: 1209
+      PAIR_RATE =  44.83%
+HEAD BYTES_RATE =  0.84488%
+TAIL BYTES_RATE =  1.53143%
+POSSIBLE CALL INS NUMBERS: 667
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       23 |                             4 |               3 |                             17.39% |                                                          75.00%
+
+
+ ======================== <arm:ble5_simple_peripheral_oad_offchip_cc26x2r1lp_app_FlashROM_Release_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 5 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.01278%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 5
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 10 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02556%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 10
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 259 | RET: 392
+      PAIR_RATE =  33.93%
+HEAD BYTES_RATE =  0.51121%
+TAIL BYTES_RATE =  0.50098%
+POSSIBLE CALL INS NUMBERS: 259
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       66 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 851 | POP: 1419
+      PAIR_RATE =  40.03%
+HEAD BYTES_RATE =  1.34320%
+TAIL BYTES_RATE =  2.09979%
+POSSIBLE CALL INS NUMBERS: 851
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      579 |                           302 |             302 |                             52.16% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 651 | POP: 1195
+      PAIR_RATE =  45.52%
+HEAD BYTES_RATE =  0.83199%
+TAIL BYTES_RATE =  1.52723%
+POSSIBLE CALL INS NUMBERS: 651
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       22 |                             3 |               2 |                             13.64% |                                                          66.67%
+
+
+ ======================== <arm:ble5_project_zero_cc26x2r1lp_app_FlashROM_Debug_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 16 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.03252%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 16
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 15 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.03049%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 15
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 537 | RET: 762
+      PAIR_RATE =  29.53%
+HEAD BYTES_RATE =  0.90246%
+TAIL BYTES_RATE =  0.77441%
+POSSIBLE CALL INS NUMBERS: 537
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      133 |                             1 |               0 |                              0.75% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1506 | POP: 2419
+      PAIR_RATE =  37.74%
+HEAD BYTES_RATE =  1.84760%
+TAIL BYTES_RATE =  2.80900%
+POSSIBLE CALL INS NUMBERS: 1506
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      958 |                           459 |             458 |                             47.91% |                                                          99.78%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1194 | POP: 2074
+      PAIR_RATE =  42.43%
+HEAD BYTES_RATE =  1.21344%
+TAIL BYTES_RATE =  2.10777%
+POSSIBLE CALL INS NUMBERS: 1194
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       21 |                             5 |               4 |                             23.81% |                                                          80.00%
+
+
+ ======================== <arm:helloworld_le_arm_sysv_0x0.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 4 | RET: 9
+      PAIR_RATE =  55.56%
+HEAD BYTES_RATE =  0.02244%
+TAIL BYTES_RATE =  0.02524%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 3 | POP: 7
+      PAIR_RATE =  57.14%
+HEAD BYTES_RATE =  0.01122%
+TAIL BYTES_RATE =  0.02244%
+POSSIBLE CALL INS NUMBERS: 3
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        3 |                             1 |               1 |                             33.33% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 2 | POP: 6
+      PAIR_RATE =  66.67%
+HEAD BYTES_RATE =  0.00561%
+TAIL BYTES_RATE =  0.01683%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+
+ ======================== <arm:ble5_project_zero_cc13x2p1lp_app_FlashROM_Debug_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 11 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02224%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 11
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 17 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.03438%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 17
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 516 | RET: 784
+      PAIR_RATE =  34.18%
+HEAD BYTES_RATE =  0.87157%
+TAIL BYTES_RATE =  0.79270%
+POSSIBLE CALL INS NUMBERS: 516
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      125 |                             1 |               0 |                              0.80% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1505 | POP: 2418
+      PAIR_RATE =  37.76%
+HEAD BYTES_RATE =  1.83818%
+TAIL BYTES_RATE =  2.79469%
+POSSIBLE CALL INS NUMBERS: 1505
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      958 |                           459 |             458 |                             47.91% |                                                          99.78%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1192 | POP: 2072
+      PAIR_RATE =  42.47%
+HEAD BYTES_RATE =  1.20523%
+TAIL BYTES_RATE =  2.09500%
+POSSIBLE CALL INS NUMBERS: 1192
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       21 |                             4 |               3 |                             19.05% |                                                          75.00%
+
+
+ ======================== <arm:ble5_simple_peripheral_oad_offchip_cc13x2p2lp_app_FlashROM_Release_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 11 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02866%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 11
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 16 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.04169%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 16
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 339 | RET: 513
+      PAIR_RATE =  33.92%
+HEAD BYTES_RATE =  0.66305%
+TAIL BYTES_RATE =  0.66826%
+POSSIBLE CALL INS NUMBERS: 339
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      101 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1228 | POP: 2029
+      PAIR_RATE =  39.48%
+HEAD BYTES_RATE =  1.92794%
+TAIL BYTES_RATE =  3.00654%
+POSSIBLE CALL INS NUMBERS: 1228
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      713 |                           362 |             360 |                             50.77% |                                                          99.45%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 976 | POP: 1750
+      PAIR_RATE =  44.23%
+HEAD BYTES_RATE =  1.27140%
+TAIL BYTES_RATE =  2.27966%
+POSSIBLE CALL INS NUMBERS: 976
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       19 |                             3 |               2 |                             15.79% |                                                          66.67%
+
+
+ ======================== <arm:arm_le_gpio_test.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 0 | RET: 58
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  4.98282%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 9 | POP: 8
+      PAIR_RATE =  11.11%
+HEAD BYTES_RATE =  0.77320%
+TAIL BYTES_RATE =  0.68729%
+POSSIBLE CALL INS NUMBERS: 9
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        6 |                             2 |               2 |                             33.33% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 9 | POP: 8
+      PAIR_RATE =  11.11%
+HEAD BYTES_RATE =  0.77320%
+TAIL BYTES_RATE =  0.68729%
+POSSIBLE CALL INS NUMBERS: 9
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        1 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+
+ ======================== <arm:arm_le_ble_ti_firmware_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 4 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02280%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 6 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.03421%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 6
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 121 | RET: 489
+      PAIR_RATE =  75.26%
+HEAD BYTES_RATE =  0.55013%
+TAIL BYTES_RATE =  1.39386%
+POSSIBLE CALL INS NUMBERS: 121
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       27 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 557 | POP: 884
+      PAIR_RATE =  36.99%
+HEAD BYTES_RATE =  1.83282%
+TAIL BYTES_RATE =  2.88463%
+POSSIBLE CALL INS NUMBERS: 557
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      513 |                           216 |             216 |                             42.11% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 471 | POP: 756
+      PAIR_RATE =  37.70%
+HEAD BYTES_RATE =  1.34255%
+TAIL BYTES_RATE =  2.15492%
+POSSIBLE CALL INS NUMBERS: 471
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        8 |                             2 |               1 |                             25.00% |                                                          50.00%
+
+
+ ======================== <arm:ble5_simple_peripheral_oad_offchip_cc13x2p1lp_app_FlashROM_Release_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 11 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02866%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 11
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 16 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.04169%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 16
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 339 | RET: 513
+      PAIR_RATE =  33.92%
+HEAD BYTES_RATE =  0.66305%
+TAIL BYTES_RATE =  0.66826%
+POSSIBLE CALL INS NUMBERS: 339
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      101 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1228 | POP: 2029
+      PAIR_RATE =  39.48%
+HEAD BYTES_RATE =  1.92794%
+TAIL BYTES_RATE =  3.00654%
+POSSIBLE CALL INS NUMBERS: 1228
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      713 |                           362 |             360 |                             50.77% |                                                          99.45%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 976 | POP: 1750
+      PAIR_RATE =  44.23%
+HEAD BYTES_RATE =  1.27140%
+TAIL BYTES_RATE =  2.27966%
+POSSIBLE CALL INS NUMBERS: 976
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       19 |                             3 |               2 |                             15.79% |                                                          66.67%
+
+
+ ======================== <arm:FreeRTOS_ThreadCreation_0x8000000.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 1 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02797%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 1
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 4 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.11189%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 12 | RET: 6
+      PAIR_RATE =  50.00%
+HEAD BYTES_RATE =  0.20979%
+TAIL BYTES_RATE =  0.08392%
+POSSIBLE CALL INS NUMBERS: 12
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        3 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 54 | POP: 134
+      PAIR_RATE =  59.70%
+HEAD BYTES_RATE =  0.78322%
+TAIL BYTES_RATE =  1.90210%
+POSSIBLE CALL INS NUMBERS: 54
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       48 |                            32 |              32 |                             66.67% |                                                         100.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 52 | POP: 132
+      PAIR_RATE =  60.61%
+HEAD BYTES_RATE =  0.72727%
+TAIL BYTES_RATE =  1.84615%
+POSSIBLE CALL INS NUMBERS: 52
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        3 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+
+ ======================== <arm:BLE_Ear_s130.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 1 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.01203%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 1
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 51 | RET: 173
+      PAIR_RATE =  70.52%
+HEAD BYTES_RATE =  0.43912%
+TAIL BYTES_RATE =  1.04066%
+POSSIBLE CALL INS NUMBERS: 51
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       17 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 181 | POP: 293
+      PAIR_RATE =  38.23%
+HEAD BYTES_RATE =  1.08879%
+TAIL BYTES_RATE =  1.76251%
+POSSIBLE CALL INS NUMBERS: 181
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      161 |                           112 |             111 |                             69.57% |                                                          99.11%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 181 | POP: 293
+      PAIR_RATE =  38.23%
+HEAD BYTES_RATE =  1.08879%
+TAIL BYTES_RATE =  1.76251%
+POSSIBLE CALL INS NUMBERS: 181
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        6 |                             5 |               5 |                             83.33% |                                                         100.00%
+
+
+ ======================== <arm:ble5_project_zero_cc13x2p2lp_app_FlashROM_Debug_oad.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 11 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02224%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 11
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 17 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.03438%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 17
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 516 | RET: 784
+      PAIR_RATE =  34.18%
+HEAD BYTES_RATE =  0.87157%
+TAIL BYTES_RATE =  0.79270%
+POSSIBLE CALL INS NUMBERS: 516
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      125 |                             1 |               0 |                              0.80% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1505 | POP: 2418
+      PAIR_RATE =  37.76%
+HEAD BYTES_RATE =  1.83818%
+TAIL BYTES_RATE =  2.79469%
+POSSIBLE CALL INS NUMBERS: 1505
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      958 |                           459 |             458 |                             47.91% |                                                          99.78%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1192 | POP: 2072
+      PAIR_RATE =  42.47%
+HEAD BYTES_RATE =  1.20523%
+TAIL BYTES_RATE =  2.09500%
+POSSIBLE CALL INS NUMBERS: 1192
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       21 |                             4 |               3 |                             19.05% |                                                          75.00%
+
+
+ ======================== <x86:bfvul_scanf_whole_le_x86-64_0x0.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 85 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00424%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 85
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 67 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00334%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 67
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 2379 | RET: 616
+      PAIR_RATE =  74.11%
+HEAD BYTES_RATE =  0.08830%
+TAIL BYTES_RATE =  0.01537%
+POSSIBLE CALL INS NUMBERS: 2379
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       92 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 791 | POP: 1028
+      PAIR_RATE =  23.05%
+HEAD BYTES_RATE =  0.01974%
+TAIL BYTES_RATE =  0.02566%
+POSSIBLE CALL INS NUMBERS: 791
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      136 |                             4 |               0 |                              2.94% |                                                           0.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 791 | POP: 1034
+      PAIR_RATE =  23.50%
+HEAD BYTES_RATE =  0.01974%
+TAIL BYTES_RATE =  0.02596%
+POSSIBLE CALL INS NUMBERS: 791
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       51 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+
+ ======================== <x86:helloworld_le_x86-64_0x0_0x0.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 2 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00038%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 4 | RET: 2
+      PAIR_RATE =  50.00%
+HEAD BYTES_RATE =  0.00057%
+TAIL BYTES_RATE =  0.00019%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        1 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 2 | POP: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00019%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 2 | POP: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00019%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+
+ ======================== <x86:helloworld_le_x86-64_0x0.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 2 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00038%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 4 | RET: 4
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00057%
+TAIL BYTES_RATE =  0.00038%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        1 |                             0 |               0 |                              0.00% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 2 | POP: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00019%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 2 | POP: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00019%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+
+ ======================== <ppc:ppc_be_vxwork_os_0x10000.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 581 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.05876%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 581
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 516 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.05219%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 516
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 7389 | RET: 16106
+      PAIR_RATE =  54.12%
+HEAD BYTES_RATE =  0.48225%
+TAIL BYTES_RATE =  0.81450%
+POSSIBLE CALL INS NUMBERS: 7389
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+     1679 |                            30 |               0 |                              1.79% |                                                           0.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1998 | POP: 5502
+      PAIR_RATE =  63.69%
+HEAD BYTES_RATE =  0.10104%
+TAIL BYTES_RATE =  0.27824%
+POSSIBLE CALL INS NUMBERS: 1998
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       24 |                             1 |               0 |                              4.17% |                                                           0.00%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1998 | POP: 5502
+      PAIR_RATE =  63.69%
+HEAD BYTES_RATE =  0.10104%
+TAIL BYTES_RATE =  0.27824%
+POSSIBLE CALL INS NUMBERS: 1998
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      115 |                            10 |               0 |                              8.70% |                                                           0.00%
+
+
+ ======================== <tricore:ASCLIN_LIN_Master_1_KIT_TC297_TFT_0x80000000.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 4 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00078%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 0 | JR-RA: 0
+      PAIR_RATE =  0.00%
+HEAD BYTES_RATE =  0.00000%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 0
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 130 | RET: 132
+      PAIR_RATE =  1.52%
+HEAD BYTES_RATE =  0.02460%
+TAIL BYTES_RATE =  0.01283%
+POSSIBLE CALL INS NUMBERS: 130
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       59 |                            29 |              29 |                             49.15% |                                                         100.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 3 | POP: 4
+      PAIR_RATE =  25.00%
+HEAD BYTES_RATE =  0.00029%
+TAIL BYTES_RATE =  0.00039%
+POSSIBLE CALL INS NUMBERS: 3
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 3 | POP: 4
+      PAIR_RATE =  25.00%
+HEAD BYTES_RATE =  0.00029%
+TAIL BYTES_RATE =  0.00039%
+POSSIBLE CALL INS NUMBERS: 3
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+
+ ======================== <tricore:TC1797_FLASH.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 1424 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.13580%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 1424
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 249 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.02375%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 249
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 27375 | RET: 18518
+      PAIR_RATE =  32.35%
+HEAD BYTES_RATE =  2.43831%
+TAIL BYTES_RATE =  0.88301%
+POSSIBLE CALL INS NUMBERS: 27375
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+     3992 |                          1784 |            1593 |                             44.69% |                                                          89.29%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1059 | POP: 980
+      PAIR_RATE =  7.46%
+HEAD BYTES_RATE =  0.05050%
+TAIL BYTES_RATE =  0.04673%
+POSSIBLE CALL INS NUMBERS: 1059
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       71 |                            18 |               1 |                             25.35% |                                                           5.56%
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 1059 | POP: 980
+      PAIR_RATE =  7.46%
+HEAD BYTES_RATE =  0.05050%
+TAIL BYTES_RATE =  0.04673%
+POSSIBLE CALL INS NUMBERS: 1059
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+       61 |                            10 |               2 |                             16.39% |                                                          20.00%
+
+
+ ======================== <tricore:ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin> ========================
 
 => MIPS
 -------------------- MIPS:LE --------------------
@@ -158,5 +1238,59 @@ PUSH: 1 | POP: 4
 HEAD BYTES_RATE =  0.00010%
 TAIL BYTES_RATE =  0.00039%
 POSSIBLE CALL INS NUMBERS: 1
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+
+ ======================== <tricore:ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x80000000.bin> ========================
+
+=> MIPS
+-------------------- MIPS:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 11 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00214%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 11
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- MIPS:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+SW-RA: 2 | JR-RA: 0
+      PAIR_RATE =  100.00%
+HEAD BYTES_RATE =  0.00039%
+TAIL BYTES_RATE =  0.00000%
+POSSIBLE CALL INS NUMBERS: 2
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+
+=> TRICORE
+-------------------- TRICORE:LE --------------------
+PROCESS BLOCK TYPE - BRANCH
+CALL-R-FUNC: 392 | RET: 233
+      PAIR_RATE =  40.56%
+HEAD BYTES_RATE =  0.07390%
+TAIL BYTES_RATE =  0.02265%
+POSSIBLE CALL INS NUMBERS: 392
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+      113 |                            50 |              47 |                             44.25% |                                                          94.00%
+
+=> ARM
+-------------------- ARM:LE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 4 | POP: 10
+      PAIR_RATE =  60.00%
+HEAD BYTES_RATE =  0.00039%
+TAIL BYTES_RATE =  0.00097%
+POSSIBLE CALL INS NUMBERS: 4
+Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
+        0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+-------------------- ARM:BE --------------------
+PROCESS BLOCK TYPE - ARGS_SAVE
+PUSH: 4 | POP: 10
+      PAIR_RATE =  60.00%
+HEAD BYTES_RATE =  0.00039%
+TAIL BYTES_RATE =  0.00097%
+POSSIBLE CALL INS NUMBERS: 4
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 

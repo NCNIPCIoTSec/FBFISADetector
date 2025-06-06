@@ -44,15 +44,15 @@ def main():
     BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=config_dir+"call_branch.json")
 
     # Demo Test
-    print("\n\n ======================== <ARM:FreeRTOS_ThreadCreation> ========================")
-    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'arm/bin/FreeRTOS_ThreadCreation_0x8000000.bin')
-    ba.analyzing()
-    print("\n\n ======================== <MIPS:busybox_0x0.bin> ========================")
-    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'mips/bin/busybox_0x0.bin')
-    ba.analyzing()
-    print("\n\n ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================")
-    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin')
-    ba.analyzing()
+    # print("\n\n ======================== <ARM:FreeRTOS_ThreadCreation> ========================")
+    # ba = BinaryAnalyzer(bin_file_path=demo_dir + 'arm/bin/FreeRTOS_ThreadCreation_0x8000000.bin')
+    # ba.analyzing()
+    # print("\n\n ======================== <MIPS:busybox_0x0.bin> ========================")
+    # ba = BinaryAnalyzer(bin_file_path=demo_dir + 'mips/bin/busybox_0x0.bin')
+    # ba.analyzing()
+    # print("\n\n ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================")
+    # ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin')
+    # ba.analyzing()
     
     # Real Firmware Test
     # print("\n\n ======================== <TRICORE:TC1797_FLASH.bin> ========================")
@@ -60,14 +60,14 @@ def main():
     # ba.analyzing()
 
     # All Demo Test
-    # for arch in os.listdir(demo_dir):
-    #     for demo in os.listdir(demo_dir+f'{arch}/bin/'):
-    #         file_path = demo_dir+f'{arch}/bin/'+demo
-    #         if not os.path.isfile(file_path):
-    #             continue
-    #         print(f"\n\n ======================== <{arch}:{demo}> ========================")
-    #         ba = BinaryAnalyzer(bin_file_path=file_path)
-    #         ba.analyzing()
+    for arch in os.listdir(demo_dir):
+        for demo in os.listdir(demo_dir+f'{arch}/bin/'):
+            file_path = demo_dir+f'{arch}/bin/'+demo
+            if not os.path.isfile(file_path):
+                continue
+            print(f"\n\n ======================== <{arch}:{demo}> ========================")
+            ba = BinaryAnalyzer(bin_file_path=file_path)
+            ba.analyzing()
 
 
 if __name__ == "__main__":
