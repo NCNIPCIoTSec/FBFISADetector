@@ -1,5 +1,6 @@
 import re
 import json
+import pypcode
 import capstone as cps
 from multiprocessing import Pool, cpu_count
 
@@ -10,18 +11,50 @@ from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
 from analysis.branch_analysis import get_branch_addr_multiprocessing
 
 
-PROCESSOR_ARCHITECTURES = {
+CAPSTONE_PROCESSOR_ARCHITECTURES = {
     "ARM": {
         "ARCH": cps.CS_ARCH_ARM,
-        "MODES": [cps.CS_MODE_THUMB, cps.CS_MODE_ARM, cps.CS_MODE_V8]
-    },
-    "AMR64": {
-        "ARCH": cps.CS_ARCH_AARCH64,
-        "MODES": [cps.CS_MODE_V9]
+        "MODES": [cps.CS_MODE_THUMB, cps.CS_MODE_ARM]
     },
     "TRICORE": {
         "ARCH": cps.CS_ARCH_TRICORE,
         "MODES": [cps.CS_MODE_TRICORE_180]
+    },
+    "MIPS": {
+        "ARCH": cps.CS_ARCH_MIPS,
+        "MODES": [
+            cps.CS_MODE_MIPS16, 
+            cps.CS_MODE_MIPS32,
+            cps.CS_MODE_MIPS64,
+            cps.CS_MODE_MIPS32R6, 
+            cps.CS_MODE_MIPS64R6, 
+            cps.CS_MODE_NANOMIPS
+        ]
+    }
+}
+
+
+GHIDRA_PROCESSOR_ARCHITECTURES = {
+    "ARM": {
+        "GHIDRA_ARCH_NAME": "ARM",
+        "SPACE_SIZE": 32,
+        "VARIANTS": [
+            "Cortex", "v4", "v4t", "v5", "v5t", "v6", "v7", "v8", "v8-m", "v8T"
+        ]
+    },
+    "TRICORE": {
+        "GHIDRA_ARCH_NAME": "tricore",
+        "SPACE_SIZE": 32,
+        "VARIANTS": [
+            "default", "tc172x", "tc176x", "tc29x"
+        ]
+    },
+    "MIPS": {
+        "GHIDRA_ARCH_NAME": "MIPS",
+        "SPACE_SIZE": 32,
+        "VARIANTS": [
+            "default", "R6", "micro"
+        ]
     }
 }
 
@@ -44,14 +77,15 @@ class BinaryBlock:
         cls.arch = arch.upper()
         cls.inner_pairs_list = inner_pairs_list
         cls.instructions_info = instructions_info
-        # 其他参数
+        # TODO:其他参数，建议读取配置文件信息实现配置
         cls.reverse_unit = 2  # 字节序反转，按多少字节反转
         cls.min_ins_length = 2  # 指令字最短的指令占多少字节长度
         cls.max_ins_length = 4
         cls.alignment_bytes = 2  # 指令对齐字节长度
+        cls.address_length = 4  # 地址空间位数（4*8=32位）
         if arch == 'ARM':
             pass
-        elif arch == "POWERPC":
+        elif arch == "MIPS":
             cls.min_ins_length = 4
             cls.reverse_unit = 4
             cls.alignment_bytes = 4
@@ -97,12 +131,12 @@ class BinaryBlock:
 
             return instr_class
     
-    def isReversedPairsValid(self) -> bool:
+    def isCapstoneReversedPairsValid(self) -> bool:
         """
-        线性扫描逆向分析算法来分析“可能”为函数块
+        Capstone 线性扫描逆向分析算法来分析“可能”为函数块
         """
         # 如果是CAPSTONE不支持的架构，不做过滤
-        if PROCESSOR_ARCHITECTURES.get(self.arch) is None:
+        if CAPSTONE_PROCESSOR_ARCHITECTURES.get(self.arch) is None:
             return True
         # 如果指令长度固定，不做处理
         if self.min_ins_length == self.max_ins_length:
@@ -111,7 +145,7 @@ class BinaryBlock:
         # print(self.binary.hex())
         # 根据架构初始化
         offset = 0x10000
-        capstone_arguments = PROCESSOR_ARCHITECTURES[self.arch]
+        capstone_arguments = CAPSTONE_PROCESSOR_ARCHITECTURES[self.arch]
         if self.arch == 'ARM':
             offset = 0x08000000
         elif self.arch == 'TRICORE':
@@ -137,7 +171,8 @@ class BinaryBlock:
                 ins_addr, ins_bytes, ins_mnemonic, ins_op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
                 if (inner_instr_set := inner_pairs_addr.get(ins_addr)) is not None and ins_mnemonic not in inner_instr_set:
                     # print(f"0x{ins_addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{ins_mnemonic}  {ins_op_str} | Exception is ({inner_instr_set})...")
-                    continue
+                    reverse_res.clear()
+                    break
                 reverse_res.append((ins_addr, ins_bytes, ins_mnemonic, ins_op_str))
             # 首尾指令检测
             if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
@@ -149,6 +184,60 @@ class BinaryBlock:
                 break
         return flag
     
+    def isGhidraReversedPairsValid(self) -> bool:
+        '''
+        使用Ghidra的P-Code进行分析
+        '''
+        # 如果指令长度固定，不做处理
+        if self.min_ins_length == self.max_ins_length:
+            return True
+
+        # 根据架构初始化
+        offset = 0x10000
+        if self.arch == 'ARM':
+            offset = 0x08000000
+        elif self.arch == 'TRICORE':
+            offset = 0x80000000
+        block_offset = offset + self.block_pair[0][1]
+
+        # 块内指令对检测
+        inner_pairs_addr = {}
+        for pair_info in self.inner_pairs:
+            ins1, ins2 = pair_info["ins"]
+            for pair in pair_info["details"]:
+                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
+                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
+
+        # 当前指令集架构的所有变体
+        ghidra_arch_name = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["GHIDRA_ARCH_NAME"]
+        arch_space_size = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["SPACE_SIZE"]
+        isa_variants = [
+            f"{ghidra_arch_name}:{self.endian}:{arch_space_size}:{var}"
+            for var in GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["VARIANTS"]
+        ]
+        
+        # 分析当前架构的所有变体，检测是否存在变体可以正确地反汇编
+        flag = False
+        analyzing_bytes = self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]]
+        for isa_var in isa_variants:
+            ctx= pypcode.Context(isa_var)
+            # 反汇编分析：线性扫描算法
+            disasm_result = ctx.disassemble(analyzing_bytes, block_offset)
+            # 逆向结果分析
+            reverse_res = []
+            for instr in disasm_result.instructions:
+                instr_addr, instr_mnemonic, instr_op_str = instr.addr, instr.mnem, instr.body
+                # 如果“块内指令对”的位置处找到了不合理的指令反汇编，则认为反汇编无意义，跳过
+                if (inner_instr_set := inner_pairs_addr.get(instr_addr)) is not None and instr_mnemonic not in inner_instr_set:
+                    reverse_res.clear()
+                    break
+                reverse_res.append((instr_addr, instr_mnemonic, instr_op_str))
+            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][1] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][1] in self.tail_instr):
+                flag = True
+                break
+
+        return flag
+
     def getInnerBlockPairs(self): 
         """
         识别所有指令对儿；
@@ -197,7 +286,7 @@ class BinaryBlock:
         '''
         # 如果当前的块未进行反汇编    
         if self.disassemble_record["capstone_arch"] is None and self.disassemble_record["capstone_mode"] is None:
-            if not self.isReversedPairsValid():  # 如果当前块反汇编后的与预估的指令对不对应，抛弃可能的不合理块
+            if not self.isCapstoneReversedPairsValid():  # 如果当前块反汇编后的与预估的指令对不对应，抛弃可能的不合理块
                 print("[Error] Block cannot be successfully reversed!")
                 return
         disassembler = cps.Cs(arch=self.disassemble_record["capstone_arch"], 
@@ -225,7 +314,7 @@ class BlocksFilter:
         return self.have_pairs_blocks
     
     def filterBlocksByHeadTailCheck(self) -> list[BinaryBlock]:
-        self.reversed_ht_valid_blocks = [j for j in self.have_pairs_blocks if self.blocks[j].isReversedPairsValid()]
+        self.reversed_ht_valid_blocks = [j for j in self.have_pairs_blocks if self.blocks[j].isGhidraReversedPairsValid()]
         return self.reversed_ht_valid_blocks
 
 

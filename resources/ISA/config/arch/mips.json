@@ -136,6 +136,6 @@
             "max_instr_length": 4,
             "alignment_size": 4
         },
-        "SupportedEndian": "be"
+        "SupportedEndian": "*"
     }
 }
