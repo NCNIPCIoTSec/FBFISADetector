@@ -200,6 +200,8 @@ class BinaryBlock:
         elif self.arch == 'TRICORE':
             offset = 0x80000000
         block_offset = offset + self.block_pair[0][1]
+        if block_offset % self.alignment_bytes != 0:
+            block_offset = 0x10000001 + block_offset
 
         # 块内指令对检测
         inner_pairs_addr = {}
@@ -425,8 +427,8 @@ class BinaryAnalyzer:
             # 评估
             calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
             # ======================================== <数据流分析> ========================================
-            # for blk_index in blk_filter.reversed_ht_valid_blocks:
-            #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
+            for blk_index in blk_filter.reversed_ht_valid_blocks:
+                blk_filter.blocks[blk_index].getBelongedFunctionBlock()
 
     def analyzing(self):
         for arch in self.supported_arch.keys():

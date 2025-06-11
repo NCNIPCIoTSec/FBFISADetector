@@ -55,19 +55,19 @@ def main():
     # ba.analyzing()
     
     # Real Firmware Test
-    # print("\n\n ======================== <TRICORE:TC1797_FLASH.bin> ========================")
-    # ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/TC1797_FLASH.bin')
-    # ba.analyzing()
+    print("\n\n ======================== <TRICORE:TC1797_FLASH.bin> ========================")
+    ba = BinaryAnalyzer(bin_file_path=demo_dir + 'tricore/bin/TC1797_FLASH.bin')
+    ba.analyzing()
 
     # All Demo Test
-    for arch in os.listdir(demo_dir):
-        for demo in os.listdir(demo_dir+f'{arch}/bin/'):
-            file_path = demo_dir+f'{arch}/bin/'+demo
-            if not os.path.isfile(file_path):
-                continue
-            print(f"\n\n ======================== <{arch}:{demo}> ========================")
-            ba = BinaryAnalyzer(bin_file_path=file_path)
-            ba.analyzing()
+    # for arch in os.listdir(demo_dir):
+    #     for demo in os.listdir(demo_dir+f'{arch}/bin/'):
+    #         file_path = demo_dir+f'{arch}/bin/'+demo
+    #         if not os.path.isfile(file_path):
+    #             continue
+    #         print(f"\n\n ======================== <{arch}:{demo}> ========================")
+    #         ba = BinaryAnalyzer(bin_file_path=file_path)
+    #         ba.analyzing()
 
 
 if __name__ == "__main__":
