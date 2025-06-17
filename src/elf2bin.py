@@ -45,7 +45,7 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
     for key in sorted_elf_record:
         # print(elf_record[key])
         # print(f"补充字节量：{hex(elf_record[key]["address"] - temp_address)}")
-        bin_format_content += b"\x00" * (elf_record[key]["address"] - temp_address)
+        bin_format_content += b"\xff" * (elf_record[key]["address"] - temp_address)
         bin_format_content += original_bin[elf_record[key]["offset"]: elf_record[key]["offset"] + elf_record[key]["memory_size"]]
         temp_address = elf_record[key]["address"] + elf_record[key]["memory_size"]
         # print(f"TEMP ADDRESS: {hex(temp_address)}")

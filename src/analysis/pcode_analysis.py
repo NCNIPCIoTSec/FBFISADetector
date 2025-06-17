@@ -1,6 +1,26 @@
 import re
+import sympy
 
 
+# P-Code 翻译器
+class PcodeTranslator:
+    def __init__(self):
+        pass
+
+    def explain2python(self, pcode_exp):
+        def explain_bool_expression():
+            pass
+        def explain_arithmetic_expression():
+            pass
+        pass
+
+    def pcode2python(self, pcode_ir):
+        pcode_ir: list[str] = [cexp for cexp in pcode_ir.split("\n") if len(cexp.strip()) > 0]
+        for pcode_exp in pcode_ir:
+            python_exp = self.explain2python(pcode_exp)
+
+
+# P-Code IR 分析器
 class PcodeIR:
     pointer_operator = ["*[ram]", "*[register]", "*"]
     neg_operator = ["!", "-", "~"]
@@ -9,8 +29,8 @@ class PcodeIR:
         "s>>", "s/", "s%", "s<", "s<=", 
         "f+", "f-", "f*", "f/", "f<", "f<=", "f==", "f!=",  
     ]
-    blank = [
-        "(", ")", "{", "}", "[", "]"
+    weak_syntax_char = [
+        "(", ")", "{", "}", "[", "]", ","
     ]
 
     def __init__(self, ir: str) -> None:
@@ -19,16 +39,17 @@ class PcodeIR:
         ir = re.sub(r'= SUBPIECE ([\[\]:\w]+), 0x(\d+)', r"= SUBPIECE(\1,0x\2)", ir)
         # 变量分析
         self.ir = ir
-        self.var_dict = {}
+        self.var_expand_chain = {}
+        self.var_undeclare_chain = {}
 
     # 内存/寄存器（指针）处理
     def get_var_from_pointer(self, variable: str):
         for p in self.pointer_operator:
             if variable.startswith(p):
                 addr_info = variable[len(p):].strip()
-                if (exp := self.var_dict.get(addr_info)) is not None:
-                    exp = exp.replace(" ", "")
-                    return f"ram[{exp}]"
+                if (exp_chain := self.var_expand_chain.get(addr_info)) is not None:
+                    exp_chain[-1] = exp_chain[-1].replace(" ", "")
+                    return f"ram[{exp_chain[-1]}]"
         return variable
 
     # 清洗变量前缀运算符（否定运算符）
@@ -37,31 +58,6 @@ class PcodeIR:
             if variable.startswith(op):
                 return op, variable[len(op):].strip()
         return "", variable
-
-    # 表达式展开
-    def expression_expand(self, cvar: str, cexp: str):
-        if self.var_dict.get(cvar) is None:
-            self.var_dict[cvar] = cexp
-        new_exp = ""
-        for ele in cexp.split(" "):
-            ele = ele.strip()
-            # 运算符/其他非变量以及常量符号，PASS
-            if len(ele) == 0 or ele in self.mid_operator:
-                new_exp += (ele + " ")
-                continue
-            # 前缀运算符处理
-            ele = self.get_var_from_pointer(ele)
-            pre_op, ele = self.get_var_from_neg(ele)
-            new_exp += pre_op
-            # 表达式展开
-            if self.var_dict.get(ele) is not None:
-                new_exp += f"( {self.var_dict[ele]} )"
-            else:
-                new_exp += ele
-            new_exp += " "
-        # 简化算式
-        new_exp = new_exp.strip()
-        self.var_dict[cvar] = new_exp if new_exp != "" else cexp
 
     # 展开的表达式进行格式化表示
     def format_print_expression(self, exp_list: list[str]):
@@ -77,60 +73,100 @@ class PcodeIR:
         # print(exp, "==>", final_exp)
         return final_exp.strip()
 
+    # 清洗表达式
+    def clean_expression(self, whole_exp: str):
+        whole_exp = whole_exp.replace("\n", "").strip()
+        whole_exp = re.sub(r"(\w+)\((.*?),(.*?)\)", r"\1( \2 , \3 )", whole_exp)
+        whole_exp = re.sub(r"(\w+)\((.*?)\)", r"\1( \2 )", whole_exp)
+        # 拆分等式
+        if (match_eq := re.search("=", whole_exp)) is not None:
+            # 表达式为赋值表达式
+            cur_var = whole_exp[:match_eq.start()].strip()
+            cur_exp = whole_exp[match_eq.end():].strip()
+            # 清洗变量名
+            _, cur_var = self.get_var_from_neg(self.get_var_from_pointer(cur_var))
+            return cur_var, cur_exp
+        return "", whole_exp
+
+    def extract_expression_variables(self, cur_exp):
+        pass
+
     # 表达式分析
     def expression_analysis(self):
+        # 跳转相关操作
+        def branch_func_trace(cexp) -> tuple:
+            # 跳转类型表达式展开
+            pattern, rep_str = r"", ""
+            if cexp.startswith("if "):
+                pattern = r"if \((.*?)\) ?goto"
+                rep_str = "if (@#@) goto"
+            elif cexp.startswith("return "):
+                pattern = r"return (.*?)$"
+                rep_str = "return (@#@)"
+            else:
+                return (cexp, "")
+            # 展开并记录
+            expand_cond_var = re.findall(pattern, cexp)[0].strip()
+            std_exp = self.var_expand_chain.get(expand_cond_var)
+            expand_exp = expand_cond_var if std_exp is None else std_exp[-1]
+            return (re.sub(pattern, rep_str.replace("@#@", self.format_print_expression(expand_exp.split(" "))), cexp), "")
+
+        # 等式表达式扩展
+        def equal_exp_trace(cvar: str, cexp: str):
+            if self.var_expand_chain.get(cvar) is None:
+                self.var_expand_chain[cvar] = [cexp]
+            if self.var_undeclare_chain.get(cvar) is None:
+                self.var_undeclare_chain[cvar] = set()
+            new_exp = ""
+            for ve in cexp.split(" "):
+                ve = ve.strip()
+                # 运算符/其他非变量以及常量符号，PASS
+                if len(ve) == 0 or ve in self.mid_operator:
+                    new_exp += (ve + " ")
+                    continue
+                # 前缀运算符处理
+                ve = self.get_var_from_pointer(ve)
+                pre_op, ve = self.get_var_from_neg(ve)
+                new_exp += pre_op
+                # 未声明变量追踪
+                if self.var_undeclare_chain.get(ve) is not None:
+                    self.var_undeclare_chain[cvar].union(self.var_undeclare_chain[ve])
+                elif not (ve in self.weak_syntax_char or ve.startswith('0x') or ve.endswith("(")):
+                    self.var_undeclare_chain[cvar].add(ve)
+                # 表达式展开
+                if self.var_expand_chain.get(ve) is not None:
+                    new_exp += f"( {self.var_expand_chain[ve][-1]} )"
+                else:
+                    new_exp += ve
+                new_exp += " "
+            # 简化算式
+            new_exp = new_exp.strip()
+            new_exp = new_exp if new_exp != "" else cexp
+            self.var_expand_chain[cvar].append(new_exp)
+            return (cvar, self.format_print_expression(new_exp.split(" ")))
+
         # 分析
         full_expressions = []
         for exp in self.ir.split('\n'):
-            # 简单清洗表达式
-            exp = exp.replace("\n", "").strip()
-            if len(exp) == 0:
-                continue
-            exp = re.sub(r"(\w+)\((.*?),(.*?)\)", r"\1( \2 , \3 )", exp)
-            exp = re.sub(r"(\w+)\((.*?)\)", r"\1( \2 )", exp)
-            # 分割表达式
-            if (match_eq := re.search("=", exp)) is not None:
-                # 表达式为赋值表达式
-                cur_var = exp[:match_eq.start()].strip()
-                cur_exp = exp[match_eq.end():].strip()
-                # 清洗变量名
-                cur_var = self.get_var_from_pointer(cur_var)
-                _, org_var = self.get_var_from_neg(cur_var)
-                # 表达式扩展
-                self.expression_expand(org_var, cur_exp)
-                # 记录表达式
-                full_expressions.append((cur_var, self.format_print_expression((cur_exp if self.var_dict.get(org_var) is None else self.var_dict[org_var]).split(" "))))
+            cvar, cexp = self.clean_expression(exp)
+            if len(cvar) > 0:
+                # 等式表达式扩展并记录
+                full_expressions.append(equal_exp_trace(cvar, cexp))
             else:
-                # 跳转类型表达式展开
-                pattern, rep_str = r"", ""
-                if exp.startswith("if "):
-                    pattern = r"if \((.*?)\) ?goto"
-                    rep_str = "if (@#@) goto"
-                elif exp.startswith("return "):
-                    pattern = r"return (.*?)$"
-                    rep_str = "return (@#@)"
-                else:
-                    # 不是跳转类型，跳过
-                    full_expressions.append((exp, ""))
-                    continue
-                # 展开并记录
-                expand_cond_var = re.findall(pattern, exp)[0].strip()
-                expand_exp = expand_cond_var if self.var_dict.get(expand_cond_var) is None else self.var_dict[expand_cond_var]
-                full_expressions.append((re.sub(pattern, rep_str.replace("@#@", self.format_print_expression(expand_exp.split(" "))), exp), ""))
+                # 跳转语句扩展并记录 / 其他
+                full_expressions.append(branch_func_trace(cexp))
         return full_expressions
-
-
-# TODO: 追踪未声明变量的传播路径
-def trace_unused_var(ir: str):
-    pass
     
 
 def main(ir: str):
-    my_pcode = PcodeIR(ir)
-    for cvar, cexp in my_pcode.expression_analysis():
-        expression = f"{cvar} = {cexp}" if cexp != "" else cvar
-        if len(expression) > 100:
-            print(expression)
+    # my_pcode = PcodeIR(ir)
+    # for cvar, cexp in my_pcode.expression_analysis():
+    #     expression = f"{cvar} = {cexp}" if cexp != "" else cvar
+    #     print(expression)
+    # print(my_pcode.var_expand_chain)
+    # print(my_pcode.var_undeclare_chain)
+    trans = PcodeTranslator()
+    trans.pcode2python(pcode_ir=ir)
 
 
 if __name__ == "__main__":
@@ -1063,7 +1099,7 @@ if __name__ == "__main__":
         print('='*50 + '[WRONG INTERMEDIATE REPRESENTATION]' + '='*50)
         main(ir)
     # 记录“正样本”
-    for ir in right_irs:
-        print('='*50 + '[RIGHT INTERMEDIATE REPRESENTATION]' + '='*50)
-        main(ir)
+    # for ir in right_irs:
+    #     print('='*50 + '[RIGHT INTERMEDIATE REPRESENTATION]' + '='*50)
+    #     main(ir)
 
