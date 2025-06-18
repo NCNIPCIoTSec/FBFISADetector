@@ -354,10 +354,14 @@ class BinaryAnalyzer:
         with open(file=bin_file_path, mode='rb') as fr:
             self.binary_res = fr.read()
 
-    def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict):
+    def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict = None):
         '''
         指定特定架构和特定
         '''
+        # 获取本架构支持的字节序
+        if ins_pair_dict is None:
+            with open(file=self.supported_arch.get(isa_arch), mode='r', encoding='utf-8') as fr:
+                ins_pair_dict = json.load(fp=fr)
         # 设置
         branch_calc_certain_arch = self.branch_calc_info.get(isa_arch.lower())
         BinaryBlock.loadCompleteBinary(binary=self.binary_res)
@@ -429,6 +433,7 @@ class BinaryAnalyzer:
             # ======================================== <数据流分析> ========================================
             for blk_index in blk_filter.reversed_ht_valid_blocks:
                 blk_filter.blocks[blk_index].getBelongedFunctionBlock()
+        return blk_filter
 
     def analyzing(self):
         for arch in self.supported_arch.keys():
@@ -442,7 +447,6 @@ class BinaryAnalyzer:
             if ins_pair_dict.get("INSTRUCTIONS") is None or ins_pair_dict.get("PAIRS") is None or ins_pair_dict.get("OTHERS") is None:
                 continue
             supported_endian = ins_pair_dict['OTHERS']['SupportedEndian'].upper()
-            # pprint.pprint(ins_pair_dict)
             # 分析
             if supported_endian == '*':
                 print(f'-------------------- {arch}:LE --------------------')

@@ -1,10 +1,9 @@
 import os
 import argparse
 
+from settings import CONFIG_DIR, ARCH_INFO
 from analysis.instruction_analysis import BinaryAnalyzer
 
-config_dir = '../resources/ISA/config/'
-demo_dir = '../resources/samples/'
 
 if __name__ == "__main__":
     # 设置参数
@@ -15,13 +14,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 初始化文件和分析器
-    arch_info = dict()
-    for arch_file in os.listdir(config_dir+'arch/'):
-        arch = arch_file.replace(".json", "")
-        arch_info[arch] = config_dir+'arch/'+arch_file
-    del arch
-    BinaryAnalyzer.updateSupportedArch(supported_arch_info=arch_info)
-    BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=config_dir+"call_branch.json")
+    BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
+    BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=CONFIG_DIR+"call_branch.json")
 
     # 分析器加载文件
     cur_analyzer = BinaryAnalyzer(bin_file_path=args.file)
