@@ -362,7 +362,7 @@ class BinaryAnalyzer:
         if ins_pair_dict is None:
             with open(file=self.supported_arch.get(isa_arch), mode='r', encoding='utf-8') as fr:
                 ins_pair_dict = json.load(fp=fr)
-        # 设置
+        # 字节块对象设置
         branch_calc_certain_arch = self.branch_calc_info.get(isa_arch.lower())
         BinaryBlock.loadCompleteBinary(binary=self.binary_res)
         BinaryBlock.loadConfigureInfo(
@@ -372,6 +372,7 @@ class BinaryAnalyzer:
         )
         
         # 从BLOCK中识别
+        block_pairs = []
         for bp in ins_pair_dict['PAIRS']['BLOCK_PAIRS']:
             k = bp["type"]
             print(f"PROCESS BLOCK TYPE - {k}")
@@ -409,7 +410,8 @@ class BinaryAnalyzer:
                     call_instructions=possible_block_head,
                     org_binary=self.binary_res
                 )
-            block_pairs = create_block_pair(
+            block_pairs.extend(
+                create_block_pair(
                 arch = isa_arch,
                 endian = endian,
                 ins_collection1 = possible_block_head,
@@ -417,22 +419,27 @@ class BinaryAnalyzer:
                 reverse_unit = reverse_unit,
                 min_ins_length = min_instr_length,
                 alignment_bytes=alignment_bytes_size,
-                features=features
+                features=features)
             )
-            # ======================================== <BLOCK的创建于内部分析> ========================================
-            blocks = []
-            for block_pair in block_pairs:
-                blocks.append(
-                    BinaryBlock(endian=endian, block_pair_instr=(head_ins, tail_ins), block_pair_data=block_pair)
-                )
-            del block_pairs
-            blk_filter = BlocksFilter(blocks=blocks)
-            del blocks
-            # 评估
-            calc_BlockRates(blocks=len(blk_filter.blocks), blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck()))
-            # ======================================== <数据流分析> ========================================
-            for blk_index in blk_filter.reversed_ht_valid_blocks:
-                blk_filter.blocks[blk_index].getBelongedFunctionBlock()
+        # ======================================== <BLOCK的创建于内部分析> ========================================
+        blocks = []
+        for block_pair in block_pairs:
+            blocks.append(
+                BinaryBlock(endian=endian, block_pair_instr=(head_ins, tail_ins), block_pair_data=block_pair)
+            )
+        del block_pairs
+        # 字节块全部转移到过滤器中，其他存储结构，节约存储资源
+        blk_filter = BlocksFilter(blocks=blocks)
+        del blocks
+        # 评估
+        calc_BlockRates(
+            blocks=len(blk_filter.blocks), 
+            blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), 
+            blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck())
+        )
+        # ======================================== <数据流分析> ========================================
+        # for blk_index in blk_filter.reversed_ht_valid_blocks:
+        #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
         return blk_filter
 
     def analyzing(self):
