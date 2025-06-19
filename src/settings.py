@@ -3,6 +3,7 @@ import os
 # 路径配置
 CONFIG_DIR = '../resources/ISA/config/'
 SAMPLES_DIR = '../resources/samples/'
+OUTPUT_DIR = '../output/'
 
 # 获取所有架构的配置文件路径信息
 ARCH_INFO = dict()
