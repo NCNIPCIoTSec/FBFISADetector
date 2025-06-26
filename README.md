@@ -1,6 +1,6 @@
 # FirmISAIdentify
-识别固件的指令集架构  
-Identify the **ISA (Instrunction Set Architecture)** of firmware
+**<font color="red">主要目标：</font>** 识别**单机固件（Monolithic Firmware）的指令集架构**  
+**<font color="red">MAIN PURPOSE:</font>** Identify **the ISA (Instrunction Set Architecture) of Monolithic Firmware**
 
 ## 前期配置
 **下载虚拟环境：** 使用的Python的virtualenv库（[环境配置参考链接](https://blog.csdn.net/littlefun591/article/details/135740075)）  
@@ -22,17 +22,21 @@ Identify the **ISA (Instrunction Set Architecture)** of firmware
   workon FirmISAIdentify
   ```
 **下载项目并下载依赖的库**  
+  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib  
+  - **需要github上自行下载的有：** capstone, pypcode  
   ```shell
   git clone https://github.com/NCNIPCIoTSec/FirmISAIdentify.git
   cd FirmISAIdentify 
   git install -r requirements.txt
   mkdir requirements && cd requirements
+  git clone https://github.com/angr/pypcode.git
+  cd pypcode && python setup.py install
+  cd ..
   git clone https://github.com/capstone-engine/capstone.git
-  cd capstone/bindings/python
-  python setup.py install
+  cd capstone/bindings/python && python setup.py install
   ```
 
-## 嵌入式固件的指令集架构识别的意义
+## 嵌入式单机固件的指令集架构识别的意义
 - 主要意义：
   - **降低识别成本**。无需再依据产品型号、硬件型号手动搜索MCU使用的指令集架构；  
   - **大规模自动化固件分析**。信息收集作为固件分析的重要阶段之一，往往涉及大量的人力成本去进行指令集架构分析、固件Flash基地址分析、程序入口点分析，这些分析获取的内容对于接下来的静态、动态分析挖掘程序漏洞都是必要的。一个完善的自动化识别工具能够大大提高固件分析效率；  

@@ -1,49 +1,56 @@
 import os
 
-from settings import ARCH_INFO, CONFIG_DIR
-from analysis.instruction_analysis import BinaryAnalyzer, BinaryBlock
+from analysis.instruction_analysis import BinaryBlock
+from evaluate.extractor import get_all_blocks
 from evaluate.lab.coveragestudy import block_display
+from evaluate.lab.ablationstudy import get_histogram_data
 
 
-def coverage_lab(bin_fpath: str, storage_space_path: str):
+def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
     '''
     覆盖率实验  
     - 输入：  
       - bin_fpath: str, 二进制bin文件的路径  
+      - elf_fpath: str, 原始ELF文件的路径
       - storage_space_path: str, 存储路径  
     - 作用  
     '''
-    def get_block_pos(block: BinaryBlock):
-        head, tail = block.block_pair
-        start_pos, end_pos = head[1], tail[2]  # structure: (instruction bytes, start offset, end offset, is head?)
-        size = end_pos - start_pos
-        return (start_pos, size)
-    
-    def block_coverage_analysis(blocks: list[BinaryBlock], svg_file_tail: str):
-        bin_blocks = []
-        for blk in blocks:
-            bin_blocks.append(get_block_pos(block=blk))
+
+    def block_coverage_analysis(bin_blocks: list[tuple], svg_file_tail: str, file_type='bin', start_addr: int = 0x8000000, title: str = "二进制文件字节块分析"):
+        '''
+        展示代码块在整个二进制文件里的位置
+        '''
         # 分析块指令对命中
-        svg_data = block_display(entry_addr=0x8000000, whole_bin=BinaryBlock.complete_binary, bin_blocks=bin_blocks)
-        svg_file = bin_file.replace('.bin', svg_file_tail)
+        svg_data = block_display(
+            entry_addr=start_addr, 
+            whole_bin=BinaryBlock.complete_binary, 
+            bin_blocks=bin_blocks,
+            title=title
+        )
+        # 存储文件
+        svg_file = os.path.split(bin_fpath)[-1]
+        if file_type.lower() == 'elf':
+            svg_file = os.path.split(elf_fpath)[-1]
+        svg_file = svg_file.replace(f'.{file_type}', svg_file_tail)
+        # 存储
         with open(file=storage_space_path+svg_file, mode='w', encoding='utf-8') as fw:
             fw.write(svg_data)
 
-    storage_path, bin_file = os.path.split(bin_fpath)
-    arch = storage_path.split('/')[-2].upper()
-    # 分析器
-    analyzer = BinaryAnalyzer(bin_fpath)
-    blk_filter = analyzer.archAnalysis(isa_arch=arch, endian='LE')
-    # 分析过滤过程中的每个块
-    block_coverage_analysis(blocks=blk_filter.blocks, svg_file_tail='_blk_pair.svg')
-    block_coverage_analysis(blocks=[blk_filter.blocks[ind] for ind in blk_filter.have_pairs_blocks], svg_file_tail='_inner_pair.svg')
-    block_coverage_analysis(blocks=[blk_filter.blocks[ind] for ind in blk_filter.reversed_ht_valid_blocks], svg_file_tail='reverse_check.svg')     
+    # ================ 预处理 ================
+    blocks_info = get_all_blocks(bin_fpath=bin_fpath, elf_fpath=elf_fpath)
+    entry_addr = blocks_info['others']['entry_address']
+
+    # ================ RESULT DISPLAY ================
+    block_coverage_analysis(bin_blocks=blocks_info['elf'], svg_file_tail='.svg', file_type='elf', start_addr=entry_addr)
+    block_coverage_analysis(bin_blocks=blocks_info['blocks'], svg_file_tail='_blk_pair.svg', start_addr=entry_addr, title='A. 指令对切块结果')
+    block_coverage_analysis(bin_blocks=blocks_info['blocks_with_inner_pairs'], svg_file_tail='_inner_pair.svg', start_addr=entry_addr, title="B. A+加入块内指令对的结果")
+    block_coverage_analysis(bin_blocks=blocks_info['blocks_with_reversing'], svg_file_tail='_reverse_check.svg', start_addr=entry_addr, title="C. B+逆向算法验证")     
 
 
 if __name__ == "__main__":
-    BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
-    BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=CONFIG_DIR+"call_branch.json")
-
+    import settings
+    
     sample_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/FreeRTOS_ThreadCreation_0x8000000.bin'
-    coverage_lab(sample_path, '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
-
+    elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
+    # coverage_lab(bin_fpath=sample_path, elf_fpath=elf_path, storage_space_path='/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
+    print(get_histogram_data(bin_file_path=sample_path, elf_file_path=elf_path))

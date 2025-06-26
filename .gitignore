@@ -1,6 +1,8 @@
 /resources/tmp*
 /src/demo*.py
 /src/test*.py
+/src/demo*.ipynb
+/src/test*.ipynb
 
 /.history
 /.vscode
