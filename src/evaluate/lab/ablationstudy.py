@@ -1,4 +1,5 @@
-from matplotlib.projections import LambertAxes
+import os
+import re
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
@@ -63,7 +64,7 @@ def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[s
     return fig, ax
 
 
-def get_histogram_data(elf_file_path: str, bin_file_path: str):
+def get_histogram_data(elf_file_path: str, bin_file_path: str, endian: str):
     def shoot(blocks):
         i, j = 0, 0
         std_num, blk_num = len(standard_blocks), len(blocks)
@@ -75,7 +76,6 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str):
             # print(std_scope, cur_scope)
             if (std_scope[0] < cur_scope[0] < std_scope[1]) or (std_scope[0] < cur_scope[1] < std_scope[1]):
                 shoot_bingo.add(sorted_blocks[j])
-                i += 1
             elif std_scope[1] < cur_scope[0]:
                 i += 1
                 continue
@@ -97,4 +97,28 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str):
             (len(inner_valid), len(inner_pairs_blocks) - len(inner_valid)), 
             (len(reverse_valid), len(reversing_blocks) - len(reverse_valid))]
     
+
+def ablation_study(samples_workspace: str, output_workspace: str):
+    endian_table = {'arm': 'le', 'tricore': 'le', 'mips': 'be'}
+
+    total_result = [[0, 0], [0, 0], [0, 0], [0, 0]]
+    for arch in os.listdir(samples_workspace):
+        arch_workspace = samples_workspace + arch
+        if not arch in endian_table.keys() or os.path.isfile(arch_workspace):
+            continue
+        elf2bin_map = {re.sub(r'_0x.*?\.bin', '.elf', fnm):fnm for fnm in os.listdir(output_workspace + arch) if fnm.endswith('.bin')}
+        for fnm in os.listdir(arch_workspace):
+            # 仅处理ELF文件
+            bin_file_name = elf2bin_map.get(fnm)
+            if not fnm.endswith('.elf') or bin_file_name is None:
+                continue
+            elf_file_path = arch_workspace + '/' + fnm
+            bin_file_path = output_workspace + arch + '/' + bin_file_name
+            del bin_file_name
+            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, endian=endian_table.get(arch))
+            for i, e in enumerate(tmp_result):
+                total_result[i][0] += e[0]
+                total_result[i][1] += e[1]
+
+    return [tuple(ele) for ele in total_result]
 

@@ -611,7 +611,7 @@ def create_block_pair(ins_collection1: list, ins_collection2: list, endian: str,
     block_pairs = []
     
     # 对齐字节不合理
-    if reverse_unit <= 0 and reverse_unit % 2:
+    if reverse_unit <= 0 or reverse_unit % 2:
         return block_pairs
     
     # 最小指令长度，为None时，默认和对齐字节长度一致
@@ -623,6 +623,7 @@ def create_block_pair(ins_collection1: list, ins_collection2: list, endian: str,
     sorted_ins.extend([(t[0], t[1], t[2], False) for t in ins_collection2])
     sorted_ins = sorted(sorted_ins, key=lambda match_item: match_item[1])
     del ins_collection1, ins_collection2
+    # print("[func-create_block_pair]Sorted Instructions:", sorted_ins)
 
     # 如果对齐字节长度大于最小指令字节长度，证明存在nop等填充/对齐指令
     if alignment_bytes > min_ins_length:
@@ -638,6 +639,7 @@ def create_block_pair(ins_collection1: list, ins_collection2: list, endian: str,
         r = ins[1] % min_ins_length
         remain_results[r].append(ins)
     del sorted_ins
+    # print("[func-create_block_pair]Alignment Sorted Instructions:", remain_results)
     
     # 初步组对儿：按照 (addr=0 | head_ins --> addr=alignment*n | tail_ins)间，无重复指令的规律；
     for k in remain_results.keys():
@@ -694,22 +696,27 @@ def filter_pairs_with_register(instr_pairs: list[tuple], endian: str, reverse_un
     """
     # 按指令长度，设置掩码规则
     h_mask_dict, t_mask_dict = {}, {}
+    # 统一成BE形式
     for reg_msk in register_mask[0]:
-        if mask_endian.upper() != endian.upper():
-            reg_msk = bytes_reverse(curb=reg_msk, reverse_unit=reverse_unit)
         h_mask_dict[len(reg_msk)] = reg_msk
     for reg_msk in register_mask[1]:
-        if mask_endian.upper() != endian.upper():
-            reg_msk = bytes_reverse(curb=reg_msk, reverse_unit=reverse_unit)
         t_mask_dict[len(reg_msk)] = reg_msk
     # 筛选
     new_pairs = []
     for i, p in enumerate(instr_pairs):
         h, t = p[0][0], p[1][0]
+        h_mask, t_mask = h_mask_dict[len(h)], t_mask_dict[len(t)]
+        if mask_endian.upper() != endian.upper():
+            if mask_endian.upper() == 'BE':  # 转成大段序，因为大段序才能完整地表示连续的寄存器/地址序列号
+                h = bytes_reverse(curb=h, reverse_unit=reverse_unit)
+                t = bytes_reverse(curb=t, reverse_unit=reverse_unit)
+            else:
+                h_mask = bytes_reverse(curb=h_mask, reverse_unit=reverse_unit)
+                t_mask = bytes_reverse(curb=t_mask, reverse_unit=reverse_unit)
         # print(get_register_num(h, h_mask_dict[len(h)]), get_register_num(t, t_mask_dict[len(t)]))
-        if get_register_num(h, h_mask_dict[len(h)]) == get_register_num(t, t_mask_dict[len(t)]):
+        if get_register_num(h, h_mask) == get_register_num(t, t_mask):
             new_pairs.append(p)
-    
+
     return new_pairs
 
 

@@ -3,7 +3,7 @@ import os
 from analysis.instruction_analysis import BinaryBlock
 from evaluate.extractor import get_all_blocks
 from evaluate.lab.coveragestudy import block_display
-from evaluate.lab.ablationstudy import get_histogram_data
+from evaluate.lab.ablationstudy import ablation_study
 
 
 def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
@@ -53,4 +53,4 @@ if __name__ == "__main__":
     sample_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/FreeRTOS_ThreadCreation_0x8000000.bin'
     elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
     # coverage_lab(bin_fpath=sample_path, elf_fpath=elf_path, storage_space_path='/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
-    print(get_histogram_data(bin_file_path=sample_path, elf_file_path=elf_path))
+    print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
