@@ -1,8 +1,13 @@
 import re
 import json
+from tracemalloc import start
+from typing import Literal
 import pypcode
 import capstone as cps
 from multiprocessing import Pool, cpu_count
+from multiprocessing.context import TimeoutError
+
+from sympy import N
 
 from evaluate.calc import calc_BlockRates, calc_BlockPairInstrRates
 from utils.config_processor import features_configure_init
@@ -77,6 +82,7 @@ class BinaryBlock:
         cls.arch = arch.upper()
         cls.inner_pairs_list = inner_pairs_list
         cls.instructions_info = instructions_info
+        cls.reverse_engines = {"capstone": {}, "ghidra": {}}  # 逆向引擎的配置信息
         # TODO:其他参数，建议读取配置文件信息实现配置
         cls.reverse_unit = 2  # 字节序反转，按多少字节反转
         cls.min_ins_length = 2  # 指令字最短的指令占多少字节长度
@@ -109,163 +115,6 @@ class BinaryBlock:
         self.high_frequency_instr: list = []
         self.is_valid_block: bool = None  # record final judgement result - Boolean
         self.inner_pairs: list = []  # record pairs found by func-get_inner_block_pairs
-        self.capstone_record: dict = {"capstone_arch": None, "capstone_mode": None, "offset": None}  # record disassemble args result from capstone
-        self.ghidra_record: dict = {"ghidra_arch": None, "offset": None}  # record disassemble args result from ghidra
-
-    def instr_preprocess(self, instr: str) -> set[str]:
-            '''
-            添加一些预处理操作，处理call指令跳转和指令名称的问题
-            '''
-            instr_class = set()
-            # 获取指令信息
-            if instr.lower().endswith("-func"):
-                instr_class.add("*")
-            else:
-                all_descriptions: list[str] = self.instructions_info[instr].get("descriptions")
-                if all_descriptions is None:
-                    print(f"[ERROR] <ARCH={self.arch}> Configure File with instruction '{instr}' has no descriptions information!")
-                    raise Exception
-                for des in all_descriptions:
-                    original_ins = des.split('-')[0].strip()
-                    for eins in original_ins.split(";"):
-                        instr_class.add(eins.strip().lower())
-
-            return instr_class
-    
-    def isCapstoneReversedPairsValid(self) -> bool:
-        """
-        Capstone 线性扫描逆向分析算法来分析“可能”为函数块
-        """
-        # 如果是CAPSTONE不支持的架构，不做过滤
-        if CAPSTONE_PROCESSOR_ARCHITECTURES.get(self.arch) is None:
-            return True
-        # 如果指令长度固定，不做处理
-        if self.min_ins_length == self.max_ins_length:
-            return True
-
-        # print(self.binary.hex())
-        # 根据架构初始化
-        offset = 0x10000
-        capstone_arguments = CAPSTONE_PROCESSOR_ARCHITECTURES[self.arch]
-        if self.arch == 'ARM':
-            offset = 0x08000000
-        elif self.arch == 'TRICORE':
-            offset = 0x80000000
-        block_offset = offset + self.block_pair[0][1]
-        
-        # For Inner Pairs Check
-        inner_pairs_addr = {}
-        for pair_info in self.inner_pairs:
-            ins1, ins2 = pair_info["ins"]
-            for pair in pair_info["details"]:
-                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
-                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
-        # print(inner_pairs_addr)
-
-        # 反汇编分析：线性扫描算法
-        flag = False
-        for cs_mode in capstone_arguments['MODES']:
-            cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
-            md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
-            reverse_res = []
-            for ins in md.disasm(code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], offset=block_offset):
-                ins_addr, ins_bytes, ins_mnemonic, ins_op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
-                if (inner_instr_set := inner_pairs_addr.get(ins_addr)) is not None and ins_mnemonic not in inner_instr_set:
-                    # print(f"0x{ins_addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{ins_mnemonic}  {ins_op_str} | Exception is ({inner_instr_set})...")
-                    reverse_res.clear()
-                    break
-                reverse_res.append((ins_addr, ins_bytes, ins_mnemonic, ins_op_str))
-            # 首尾指令检测
-            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
-                self.disassemble_record["capstone_arch"] = capstone_arguments['ARCH']
-                self.disassemble_record["capstone_mode"] = cs_mode_with_endian
-                self.disassemble_record["offset"] = block_offset
-                # 标记flag
-                flag = True
-                break
-        return flag
-    
-    def isGhidraReversedPairsValid(self) -> bool:
-        '''
-        Ghidra 线性扫描逆向分析算法来分析“可能”为函数块
-        '''
-        # 如果指令长度固定，不做处理
-        if self.min_ins_length == self.max_ins_length:
-            return True
-
-        # 根据架构初始化
-        offset = 0x10000
-        if self.arch == 'ARM':
-            offset = 0x08000000
-        elif self.arch == 'TRICORE':
-            offset = 0x80000000
-        block_offset = offset + self.block_pair[0][1]
-        if block_offset % self.alignment_bytes != 0:
-            block_offset = 0x10000001 + block_offset
-
-        # 块内指令对检测
-        inner_pairs_addr = {}
-        for pair_info in self.inner_pairs:
-            ins1, ins2 = pair_info["ins"]
-            for pair in pair_info["details"]:
-                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
-                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
-
-        # 当前指令集架构的所有变体
-        ghidra_arch_name = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["GHIDRA_ARCH_NAME"]
-        arch_space_size = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["SPACE_SIZE"]
-        isa_variants = [
-            f"{ghidra_arch_name}:{self.endian}:{arch_space_size}:{var}"
-            for var in GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["VARIANTS"]
-        ]
-        
-        # 分析当前架构的所有变体，检测是否存在变体可以正确地反汇编
-        flag = False
-        analyzing_bytes = self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]]
-        for isa_var in isa_variants:
-            ctx= pypcode.Context(isa_var)
-            # 反汇编分析：线性扫描算法
-            disasm_result = None
-            try:
-                disasm_result = ctx.disassemble(analyzing_bytes, block_offset)
-            except Exception as e:
-                # print(f"[ERROR] <ARCH={self.arch}> <ISA={isa_var}> Disassemble failed: {e}")
-                continue
-            # 逆向结果分析
-            reverse_res = []
-            for instr in disasm_result.instructions:
-                instr_addr, instr_mnemonic, instr_op_str = instr.addr, instr.mnem, instr.body
-                # 如果“块内指令对”的位置处找到了不合理的指令反汇编，则认为反汇编无意义，跳过
-                if (inner_instr_set := inner_pairs_addr.get(instr_addr)) is not None and instr_mnemonic not in inner_instr_set:
-                    reverse_res.clear()
-                    break
-                reverse_res.append((instr_addr, instr_mnemonic, instr_op_str))
-            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][1] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][1] in self.tail_instr):
-                self.ghidra_record["ghidra_arch"] = isa_var
-                self.ghidra_record["offset"] = block_offset
-                flag = True
-                break
-
-        return flag
-
-    def getBelongedFunctionBlock(self):
-        '''
-        当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
-        '''
-        if self.ghidra_record.get("ghidra_arch") is None:
-            print("[ERROR] <ARCH={self.arch}> Please check whether the block is a valid function block...")
-            return None
-        ctx = pypcode.Context(self.ghidra_record["ghidra_arch"])
-        try:
-            ghidra_disam = ctx.disassemble(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], self.ghidra_record["offset"])
-            print(ghidra_disam)
-            print("+" * 150)
-            ghidra_ir = ctx.translate(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], self.ghidra_record["offset"])
-            print(ghidra_ir)
-            print("=" * 150)
-        except Exception as e:
-            print(f"[ERROR] <ARCH={self.arch}> Disassemble/Translate failed: {e}")
-            return None
 
     def getInnerBlockPairs(self): 
         """
@@ -309,6 +158,194 @@ class BinaryBlock:
         
         return self.inner_pairs
     
+    def instr_preprocess(self, instr: str) -> set[str]:
+            '''
+            添加一些预处理操作，处理call指令跳转和指令名称的问题
+            '''
+            instr_class = set()
+            # 获取指令信息
+            if instr.lower().endswith("-func"):
+                instr_class.add("*")
+            else:
+                all_descriptions: list[str] = self.instructions_info[instr].get("descriptions")
+                if all_descriptions is None:
+                    print(f"[ERROR] <ARCH={self.arch}> Configure File with instruction '{instr}' has no descriptions information!")
+                    raise Exception
+                for des in all_descriptions:
+                    original_ins = des.split('-')[0].strip()
+                    for eins in original_ins.split(";"):
+                        instr_class.add(eins.strip().lower())
+
+            return instr_class
+    
+    def isCapstoneReversedPairsValid(self) -> tuple[bool, str, dict]:
+        """
+        TODO: 重新优化
+        Capstone 线性扫描逆向分析算法来分析“可能”为函数块
+        """
+        flag = False
+        reverse_engine_config = {"capstone_arch": None, "capstone_mode": None, "base_addr": None}
+        # 如果是CAPSTONE不支持的架构，不做过滤
+        if CAPSTONE_PROCESSOR_ARCHITECTURES.get(self.arch) is None:
+            return False, "capstone", reverse_engine_config
+
+        # print(self.binary.hex())
+        # 根据架构初始化
+        base_addr = 0x10000
+        capstone_arguments = CAPSTONE_PROCESSOR_ARCHITECTURES[self.arch]
+        if self.arch == 'ARM':
+            base_addr = 0x08000000
+        elif self.arch == 'TRICORE':
+            base_addr = 0x80000000
+        block_offset = base_addr + self.block_pair[0][1]
+        
+        # For Inner Pairs Check
+        inner_pairs_addr = {}
+        for pair_info in self.inner_pairs:
+            ins1, ins2 = pair_info["ins"]
+            for pair in pair_info["details"]:
+                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
+                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
+        # print(inner_pairs_addr)
+
+        # 反汇编分析：线性扫描算法
+        for cs_mode in capstone_arguments['MODES']:
+            cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
+            md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
+            reverse_res = []
+            for ins in md.disasm(code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], offset=block_offset):
+                ins_addr, ins_bytes, ins_mnemonic, ins_op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
+                if (inner_instr_set := inner_pairs_addr.get(ins_addr)) is not None and ins_mnemonic not in inner_instr_set:
+                    # print(f"0x{ins_addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{ins_mnemonic}  {ins_op_str} | Exception is ({inner_instr_set})...")
+                    reverse_res.clear()
+                    break
+                reverse_res.append((ins_addr, ins_bytes, ins_mnemonic, ins_op_str))
+            # 首尾指令检测
+            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
+                # 标记flag
+                flag = True
+                reverse_engine_config["capstone_arch"] = capstone_arguments['ARCH']
+                reverse_engine_config["capstone_mode"] = cs_mode_with_endian
+                reverse_engine_config["base_addr"] = base_addr
+                break
+
+        return flag, "capstone", reverse_engine_config
+    
+    def isGhidraReversedPairsValid(self) -> tuple[bool, str, dict]:
+        '''
+        Ghidra 线性扫描逆向分析算法来分析“可能”为函数块
+        '''
+        # 初始化信息
+        flag = False
+        all_rvs_configs = []
+        if (cur_engines := self.reverse_engines.get('ghidra')) is not None and len(cur_engines) > 0:  # 判断是否存有记录
+            all_rvs_configs.extend([cur_engines[hash_id] for hash_id in cur_engines.keys()])
+        reverse_engine_config = None  # 返回结果
+        analyzing_bytes = self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]]  # 要分析的字节
+        # ============== 块内指令对检测（初始化） ==============
+        block_offset = self.block_pair[0][1]
+        if block_offset % self.alignment_bytes != 0:
+            block_offset = 0x10000001 + block_offset
+        # 块内检测
+        inner_pairs_addr = {}
+        for pair_info in self.inner_pairs:
+            ins1, ins2 = pair_info["ins"]
+            for pair in pair_info["details"]:
+                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
+                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
+        
+        # # 如果指令长度固定，不做处理
+        # if self.min_ins_length == self.max_ins_length:
+        #     return True
+
+        def get_remain_isa_info(checked_variants: list = []):
+            '''
+            获取所有可能
+            '''
+            # 根据架构初始化
+            base_address = 0x10000
+            if self.arch == 'ARM':
+                base_address = 0x08000000
+            elif self.arch == 'TRICORE':
+                base_address = 0x80000000
+
+            # 当前指令集架构的所有变体
+            ghidra_arch_name = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["GHIDRA_ARCH_NAME"]
+            arch_space_size = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["SPACE_SIZE"]
+            isa_variants = [
+                f"{ghidra_arch_name}:{self.endian}:{arch_space_size}:{var}"
+                for var in GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["VARIANTS"]
+            ]
+
+            return [isa_info for isa_var in isa_variants if (isa_info := {"ghidra_arch": isa_var, "base_addr": base_address}) not in checked_variants]
+        
+        def loop_check_variants(isa_info: dict) -> dict:
+            isa_var, base_addr = isa_info["ghidra_arch"], isa_info['base_addr']
+            ctx= pypcode.Context(isa_var)
+            # 反汇编分析：线性扫描算法
+            disasm_result = None
+            try:
+                disasm_result = ctx.disassemble(analyzing_bytes, base_addr+block_offset)
+            except Exception as e:
+                # print(f"[ERROR] <ARCH={self.arch}> <ISA={isa_var}> Disassemble failed: {e}")
+                return None
+            # 逆向结果分析
+            # print("reversed-result analyzing...")
+            reverse_res = []
+            for instr in disasm_result.instructions:
+                instr_addr, instr_mnemonic, instr_op_str = instr.addr, instr.mnem, instr.body
+                # 如果“块内指令对”的位置处找到了不合理的指令反汇编，则认为反汇编无意义，跳过
+                if (inner_instr_set := inner_pairs_addr.get(instr_addr)) is not None and instr_mnemonic not in inner_instr_set:
+                    reverse_res.clear()
+                    return None
+                reverse_res.append((instr_addr, instr_mnemonic, instr_op_str))
+            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][1] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][1] in self.tail_instr):
+                return isa_info
+            return None
+
+        # 判断选择
+        pos_isa_variants = []
+        if len(all_rvs_configs) > 0:
+            pos_isa_variants = [isa_info[0] for isa_info in sorted(all_rvs_configs, key=lambda x: x[1])]
+            for isa_info in pos_isa_variants:
+                reverse_engine_config = loop_check_variants(isa_info)
+                if reverse_engine_config is not None:
+                    flag = True
+                    break
+        # print(pos_isa_variants)
+
+        # 喊没有最终结果的话，测试剩余
+        if not flag:
+            for isa_info in get_remain_isa_info(checked_variants=pos_isa_variants):
+                reverse_engine_config = loop_check_variants(isa_info)
+                if reverse_engine_config is not None:
+                    flag = True
+                    break
+        
+        # print(flag, 'ghidra', reverse_engine_config)
+        return flag, 'ghidra', reverse_engine_config
+
+    def getBelongedFunctionBlock(self):
+        '''
+        FIXME: 存储机制已经修改，需注意
+        当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
+        '''
+        ghidra_record = self.reverse_engines['ghidra']
+        if ghidra_record.get("ghidra_arch") is None:
+            print("[ERROR] <ARCH={self.arch}> Please check whether the block is a valid function block...")
+            return None
+        ctx = pypcode.Context(ghidra_record["ghidra_arch"])
+        try:
+            ghidra_disam = ctx.disassemble(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], ghidra_record["offset"])
+            print(ghidra_disam)
+            print("+" * 150)
+            ghidra_ir = ctx.translate(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], ghidra_record["offset"])
+            print(ghidra_ir)
+            print("=" * 150)
+        except Exception as e:
+            print(f"[ERROR] <ARCH={self.arch}> Disassemble/Translate failed: {e}")
+            return None
+
 
 class BlocksFilter:
     '''
@@ -319,12 +356,57 @@ class BlocksFilter:
         self.have_pairs_blocks = []
         self.reversed_ht_valid_blocks = []
 
+    @staticmethod
+    def sub_processing(blk_tag: int, block: BinaryBlock) -> tuple[int, tuple[bool, str, dict]]:
+        '''
+        子进程运行
+        '''
+        return blk_tag, block.isGhidraReversedPairsValid()
+
     def filterBlocksByInnerPairs(self) -> list[BinaryBlock]:
         self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
         return self.have_pairs_blocks
     
-    def filterBlocksByHeadTailCheck(self) -> list[BinaryBlock]:
-        self.reversed_ht_valid_blocks = [j for j in self.have_pairs_blocks if self.blocks[j].isGhidraReversedPairsValid()]
+    def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False) -> list[BinaryBlock]:
+        def record_reversing_result(blk_tag: int, rvs_res: tuple[bool, str, dict]):
+            '''
+            记录反汇编验证后的架构
+            '''
+            is_reversed, engine, config_info = rvs_res
+            if is_reversed:
+                hash_id = hash("".join([k+str(config_info[k]) for k in config_info.keys()]))
+                # 记录反汇编架构信息
+                if BinaryBlock.reverse_engines[engine].get(hash_id) is None:
+                    BinaryBlock.reverse_engines[engine][hash_id] = [config_info, 0]
+                BinaryBlock.reverse_engines[engine][hash_id][1] += 1
+                # record block id
+                self.reversed_ht_valid_blocks.append(blk_tag)
+
+        def process_callback(res):
+            # 子进程回调函数
+            blk_num, rvs_res = res
+            record_reversing_result(blk_tag=blk_num, rvs_res=rvs_res)
+            
+        # 是否开启多进程
+        if open_multi_processing:
+            cpc = cpu_count()
+            with Pool(processes=cpc) as pool:
+                processes = []
+                for j in self.have_pairs_blocks:
+                    processes.append(pool.apply_async(func=self.sub_processing, args=(j, self.blocks[j]), callback=process_callback))
+                # TODO: 多进程再优化
+                for proc in processes:
+                    try:
+                        proc.get(timeout=30)
+                    except TimeoutError:
+                        print('A Subprocess cannot return proper result!!!')
+                        pass
+        else:
+            for j in self.have_pairs_blocks:
+                record_reversing_result(j, self.blocks[j].isGhidraReversedPairsValid())
+                # print(BinaryBlock.reverse_engines)
+        
+        # print(BinaryBlock.reverse_engines)
         return self.reversed_ht_valid_blocks
 
 
@@ -375,7 +457,7 @@ class BinaryAnalyzer:
         block_pairs = []
         for bp in ins_pair_dict['PAIRS']['BLOCK_PAIRS']:
             k = bp["type"]
-            print(f"PROCESS BLOCK TYPE - {k}")
+            # print(f"PROCESS BLOCK TYPE - {k}")
             address_length = ins_pair_dict['OTHERS']['MemoryArgs']['address_length']
             reverse_unit = ins_pair_dict['OTHERS']['MemoryArgs']['reverse_unit_size']
             min_instr_length = ins_pair_dict['OTHERS']['MemoryArgs']['min_instr_length']
@@ -391,7 +473,8 @@ class BinaryAnalyzer:
                 reverse_unit=reverse_unit
             )
             # 评估
-            calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
+            # print(f'-------------------- {isa_arch}:{endian} --------------------')
+            # calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
             # ======================================== <指令对儿组合> ========================================
             # print([instr.hex() for instr, _, _ in possible_block_head])
             if k == 'BRANCH':
@@ -421,6 +504,7 @@ class BinaryAnalyzer:
                 alignment_bytes=alignment_bytes_size,
                 features=features)
             )
+        # print("Creating Blocks Successfully!!!")
         # ======================================== <BLOCK的创建于内部分析> ========================================
         blocks = []
         for block_pair in block_pairs:
@@ -429,40 +513,86 @@ class BinaryAnalyzer:
             )
         del block_pairs
         # 字节块全部转移到过滤器中，其他存储结构，节约存储资源
+        # print("Start to filter less syntax blocks!")
         blk_filter = BlocksFilter(blocks=blocks)
         del blocks
+        # 过滤
+        blk_filter.filterBlocksByInnerPairs()
+        blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=True)  # 开启多进程
         # 评估
-        calc_BlockRates(
-            blocks=len(blk_filter.blocks), 
-            blocks_with_pair=len(blk_filter.filterBlocksByInnerPairs()), 
-            blocks_valid_reverse=len(blk_filter.filterBlocksByHeadTailCheck())
-        )
+        # print(f'-------------------- {isa_arch}:{endian} --------------------')
+        # calc_BlockRates(
+        #     blocks=len(blk_filter.blocks), 
+        #     blocks_with_pair=len(blk_filter.have_pairs_blocks), 
+        #     blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks)
+        # )
         # ======================================== <数据流分析> ========================================
         # for blk_index in blk_filter.reversed_ht_valid_blocks:
         #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
         return blk_filter
 
+    @ staticmethod
+    def is_best_choice(sample: tuple, standards: tuple):
+        # 架构数值比对，判断最佳选项
+        final_rate = (sample[2]/sample[1]) if sample[1] > 0 else 0
+        middle_rate = (sample[1]/sample[0]) if sample[0] > 0 else 0
+        standard_valid_blocks = standards[0] * standards[1] * standards[2]
+        standard_inner_blocks = standards[0] * standards[1]
+        if sample[2] > standard_valid_blocks:
+            return (sample[0], middle_rate, final_rate), True
+        elif sample[2] == standard_valid_blocks:
+            if sample[1] > standard_inner_blocks:
+                return (sample[0], middle_rate, final_rate), True
+            elif sample[1] == standard_inner_blocks and sample[0] > standards[0]:
+                return (sample[0], middle_rate, final_rate), True
+        return standards, False
+    
+    def specific_arch_analyzing(self, arch: str):
+        '''
+        制定架构进行分析
+        '''
+        # 架构信息
+        arch = arch.upper()
+        possible_arch = "null"
+        pos_arch_blk_data = (0, 0, 0)
+        # 获取本架构支持的字节序
+        ins_pair_dict = dict()
+        with open(file=self.supported_arch.get(arch), mode='r', encoding='utf-8') as fr:
+            ins_pair_dict = json.load(fp=fr)
+        # 配置文件信息不完善，PASS
+        if ins_pair_dict.get("INSTRUCTIONS") is None or ins_pair_dict.get("PAIRS") is None or ins_pair_dict.get("OTHERS") is None:
+            return None, None
+        # 字节序信息
+        supported_endian = ins_pair_dict['OTHERS']['SupportedEndian'].upper()
+        supported_endian = ['LE', 'BE'] if supported_endian == "*" else [supported_endian]
+        # 分析
+        for endian in supported_endian:
+            filter = self.archAnalysis(isa_arch=arch, endian=endian, ins_pair_dict=ins_pair_dict)
+            pos_arch_blk_data, is_pos_arch = self.is_best_choice(
+                sample=(len(filter.blocks), len(filter.have_pairs_blocks), len(filter.reversed_ht_valid_blocks)), 
+                standards=pos_arch_blk_data
+            )
+            possible_arch = arch+':'+endian if is_pos_arch else possible_arch
+
+        return possible_arch, pos_arch_blk_data
+
     def analyzing(self):
+        '''
+        多架构分析（顺序分析）
+        '''
+        possible_arch = "null"
+        pos_arch_blk_data = (0, 0, 0)
+        # 依次分析
         for arch in self.supported_arch.keys():
-            arch = arch.upper()
-            print(f'\n=> {arch}')
-            # 获取本架构支持的字节序
-            ins_pair_dict = dict()
-            with open(file=self.supported_arch.get(arch), mode='r', encoding='utf-8') as fr:
-                ins_pair_dict = json.load(fp=fr)
-            # 配置文件信息不完善，PASS
-            if ins_pair_dict.get("INSTRUCTIONS") is None or ins_pair_dict.get("PAIRS") is None or ins_pair_dict.get("OTHERS") is None:
-                continue
-            supported_endian = ins_pair_dict['OTHERS']['SupportedEndian'].upper()
-            # 分析
-            if supported_endian == '*':
-                print(f'-------------------- {arch}:LE --------------------')
-                self.archAnalysis(isa_arch=arch, endian='LE', ins_pair_dict=ins_pair_dict)
-                print(f'-------------------- {arch}:BE --------------------')
-                self.archAnalysis(isa_arch=arch, endian='BE', ins_pair_dict=ins_pair_dict)
-            else:
-                print(f'-------------------- {arch}:{supported_endian} --------------------')
-                self.archAnalysis(isa_arch=arch, endian=supported_endian, ins_pair_dict=ins_pair_dict)
+            cur_arch, cur_data = self.specific_arch_analyzing(arch)
+            sample_data = (cur_data[0], cur_data[0] * cur_data[1], cur_data[0] * cur_data[1] * cur_data[2])
+            pos_arch_blk_data, is_pos_arch = self.is_best_choice(
+                sample=sample_data, 
+                standards=pos_arch_blk_data
+            )
+            possible_arch = cur_arch if is_pos_arch else possible_arch
+
+        return possible_arch, pos_arch_blk_data
 
 
 ############################# 指令搜索算法 #############################

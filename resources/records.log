@@ -106,6 +106,7 @@ TAIL BYTES_RATE =  0.03909%
 POSSIBLE CALL INS NUMBERS: 270
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
        98 |                             1 |               0 |                              1.02% |                                                           0.00%
+[<built-in method upper of str object at 0x7f701ddc00f0>] ==> (2, 0.5, 0.0) | (2, 0.5, 0.0)
 
 
  ======================== <arm:helloworld_le_arm_sysv_0x0.bin> ========================
@@ -160,6 +161,7 @@ TAIL BYTES_RATE =  0.01675%
 POSSIBLE CALL INS NUMBERS: 2
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+[<built-in method upper of str object at 0x7f70228a9a30>] ==> (3, 0.3333333333333333, 1.0) | (3, 0.3333333333333333, 1.0)
 
 
  ======================== <arm:FreeRTOS_ThreadCreation_0x8000000.bin> ========================
@@ -214,6 +216,7 @@ TAIL BYTES_RATE =  1.43760%
 POSSIBLE CALL INS NUMBERS: 52
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         3 |                             0 |               0 |                              0.00% |                                                           0.00%
+[<built-in method upper of str object at 0x7f70228a9a30>] ==> (48, 0.6666666666666666, 1.0) | (48, 0.6666666666666666, 1.0)
 
 
  ======================== <x86:bfvul_scanf_whole_le_x86-64_0x0.bin> ========================
@@ -268,6 +271,7 @@ TAIL BYTES_RATE =  0.02604%
 POSSIBLE CALL INS NUMBERS: 798
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
        56 |                             0 |               0 |                              0.00% |                                                           0.00%
+[<built-in method upper of str object at 0x7f70217278b0>] ==> (137, 0.029197080291970802, 0.0) | (137, 0.029197080291970802, 0.0)
 
 
  ======================== <ppc:ppc_be_vxwork_os_0x10000.bin> ========================
@@ -322,6 +326,7 @@ TAIL BYTES_RATE =  0.06996%
 POSSIBLE CALL INS NUMBERS: 3114
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
       262 |                            20 |               1 |                              7.63% |                                                           5.00%
+[<built-in method upper of str object at 0x7f7022985bf0>] ==> (159, 0.006289308176100629, 0.0) | (159, 0.006289308176100629, 0.0)
 
 
  ======================== <tricore:ADC_Background_Scan_1_KIT_TC297_TFT_0x60000000.bin> ========================
@@ -376,6 +381,7 @@ TAIL BYTES_RATE =  0.00000%
 POSSIBLE CALL INS NUMBERS: 1
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+[<built-in method upper of str object at 0x7f7022baff70>] ==> (0, 0, 0) | (0, 0, 0)
 
 
  ======================== <tricore:ASCLIN_LIN_Master_1_KIT_TC297_TFT_0x60000000.bin> ========================
@@ -430,6 +436,7 @@ TAIL BYTES_RATE =  0.00000%
 POSSIBLE CALL INS NUMBERS: 3
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+[<built-in method upper of str object at 0x7f7022baff70>] ==> (0, 0, 0) | (0, 0, 0)
 
 
  ======================== <tricore:ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x60000000.bin> ========================
@@ -484,3 +491,4 @@ TAIL BYTES_RATE =  0.00000%
 POSSIBLE CALL INS NUMBERS: 4
 Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result
         0 |                             0 |               0 |                              0.00% |                                                           0.00% 
+[<built-in method upper of str object at 0x7f7022baff70>] ==> (0, 0, 0) | (0, 0, 0)

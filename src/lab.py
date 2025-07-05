@@ -1,6 +1,9 @@
+from ast import mod
+from math import inf
 import os
+import re
 
-from analysis.instruction_analysis import BinaryBlock
+from analysis.instruction_analysis import BinaryBlock, BinaryAnalyzer
 from evaluate.extractor import get_all_blocks
 from evaluate.lab.coveragestudy import block_display
 from evaluate.lab.ablationstudy import ablation_study
@@ -47,10 +50,45 @@ def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
     block_coverage_analysis(bin_blocks=blocks_info['blocks_with_reversing'], svg_file_tail='_reverse_check.svg', start_addr=entry_addr, title="C. B+逆向算法验证")     
 
 
+def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
+    recorded_info = []
+    with open(file=record_fpath, mode='r', encoding='utf-8') as fr:
+        res = fr.read().split('\n')
+        for sent in res:
+            info = re.findall(rf'\[(.*?):{arch.upper()}\] ==> (.*?) \|', sent)
+            if len(info) == 0:
+                continue
+            file_name, predict_arch = info[0]
+            recorded_info.append((file_name, predict_arch))
+        # print(recorded_info)
+    recorded_files = {f: a for f, a in recorded_info}
+
+    for demo in os.listdir(samples_dir):
+        file_path = f'{samples_dir}/'+demo
+        if not demo.endswith('.code'):
+            continue
+        if demo in recorded_files.keys():
+            file = open(file=file_path, mode='rb')
+            size = len(file.read())
+            file.close()
+            if recorded_files.get(demo) != 'null':
+                continue
+            print(f'{demo} ==> size: {size}')
+        print(f'[{demo}:{arch.upper()}]', end='')
+        ba = BinaryAnalyzer(bin_file_path=file_path)
+        cur_arch, cur_data = ba.analyzing()
+        print(f' ==> {cur_arch} | {cur_data}')
+
+
 if __name__ == "__main__":
     import settings
     
     sample_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/FreeRTOS_ThreadCreation_0x8000000.bin'
     elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
     # coverage_lab(bin_fpath=sample_path, elf_fpath=elf_path, storage_space_path='/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
-    print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
+    # print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
+    accuracy_lab(
+        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/armhf', 
+        arch='arm',
+        record_fpath='../resources/tmp3.txt'
+    )

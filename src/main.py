@@ -30,7 +30,9 @@ def main():
                 continue
             print(f"\n\n ======================== <{arch}:{demo}> ========================")
             ba = BinaryAnalyzer(bin_file_path=file_path)
-            ba.analyzing()
+            cur_arch, cur_data = ba.analyzing()
+            print(f'[{arch.upper}] ==> {cur_arch} | {cur_data}')
+
 
 
 if __name__ == "__main__":

@@ -19,5 +19,6 @@ if __name__ == "__main__":
 
     # 分析器加载文件
     cur_analyzer = BinaryAnalyzer(bin_file_path=args.file)
-    cur_analyzer.analyzing()
+    arch_info = cur_analyzer.analyzing()
+    print(f"Predict Arch: {arch_info}")
     

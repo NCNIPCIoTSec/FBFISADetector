@@ -158,7 +158,7 @@ class PcodeIR:
         return full_expressions
     
 
-def main(ir: str):
+def test_pcode_analysis(ir: str):
     # my_pcode = PcodeIR(ir)
     # for cvar, cexp in my_pcode.expression_analysis():
     #     expression = f"{cvar} = {cexp}" if cexp != "" else cvar
@@ -1097,7 +1097,7 @@ if __name__ == "__main__":
     # 记录“负样本”
     for ir in wrong_irs:
         print('='*50 + '[WRONG INTERMEDIATE REPRESENTATION]' + '='*50)
-        main(ir)
+        test_pcode_analysis(ir)
     # 记录“正样本”
     # for ir in right_irs:
     #     print('='*50 + '[RIGHT INTERMEDIATE REPRESENTATION]' + '='*50)
