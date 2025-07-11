@@ -6,6 +6,7 @@ from analysis.instruction_analysis import BinaryAnalyzer
 
 
 def main():
+    BinaryAnalyzer.openMultiProcessing()
     # Demo Test
     # print("\n\n ======================== <ARM:FreeRTOS_ThreadCreation> ========================")
     # ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'arm/FreeRTOS_ThreadCreation_0x8000000.bin')

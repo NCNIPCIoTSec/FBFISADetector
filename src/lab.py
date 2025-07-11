@@ -1,7 +1,6 @@
-from ast import mod
-from math import inf
 import os
 import re
+import json
 
 from analysis.instruction_analysis import BinaryBlock, BinaryAnalyzer
 from evaluate.extractor import get_all_blocks
@@ -51,34 +50,47 @@ def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
 
 
 def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
-    recorded_info = []
-    with open(file=record_fpath, mode='r', encoding='utf-8') as fr:
-        res = fr.read().split('\n')
-        for sent in res:
-            info = re.findall(rf'\[(.*?):{arch.upper()}\] ==> (.*?) \|', sent)
-            if len(info) == 0:
-                continue
-            file_name, predict_arch = info[0]
-            recorded_info.append((file_name, predict_arch))
-        # print(recorded_info)
-    recorded_files = {f: a for f, a in recorded_info}
-
+    recorded_files = dict()
+    if os.path.exists(record_fpath):
+        with open(file=record_fpath, mode='r', encoding='utf-8') as fr:
+            recorded_files = json.load(fp=fr)
+    # 验证列表
+    FT, TF = 0, 0
+    echo, count = 0, 0
     for demo in os.listdir(samples_dir):
-        file_path = f'{samples_dir}/'+demo
-        if not demo.endswith('.code'):
+        if demo.endswith('.code') or demo.endswith('.json'):
             continue
-        if demo in recorded_files.keys():
-            file = open(file=file_path, mode='rb')
-            size = len(file.read())
-            file.close()
-            if recorded_files.get(demo) != 'null':
-                continue
-            print(f'{demo} ==> size: {size}')
-        print(f'[{demo}:{arch.upper()}]', end='')
+        file_path = f'{samples_dir}/'+demo
+        if (cur_info := recorded_files.get(file_path)) is not None:
+            if cur_info['proper']:
+                TF += 1
+            else:
+                FT += 1
+            continue
+        # 分析与记录
+        print(f'AnalysisRes[{echo}-{count}] {demo}:{arch.upper()} ==> ', end="")
         ba = BinaryAnalyzer(bin_file_path=file_path)
         cur_arch, cur_data = ba.analyzing()
-        print(f' ==> {cur_arch} | {cur_data}')
-
+        judge_res = arch.upper() == cur_arch
+        if judge_res:
+            TF += 1
+        else:
+            FT += 1
+        print(f'{cur_arch} | {cur_data} | Judge={judge_res}')
+        # 记录
+        recorded_files[file_path] = {"arch": arch.upper(), "predict_arch": cur_arch, "predict_arch_data": str(cur_data), "proper": judge_res}
+        # 每N条，记录一次，避免崩溃导致数据丢失
+        count += 1
+        if count > 20:
+            echo += 1
+            with open(file=record_fpath, mode='w', encoding='utf-8') as fw:
+                json.dump(obj=recorded_files, fp=fw)
+            count = 0
+    if (echo + count) > 0:
+        with open(file=record_fpath, mode='w', encoding='utf-8') as fw:
+            json.dump(obj=recorded_files, fp=fw)
+    print(f'RATE: {TF}/{TF+FT}={TF/(FT+TF)*100:.2f}%')
+        
 
 if __name__ == "__main__":
     import settings
@@ -89,6 +101,6 @@ if __name__ == "__main__":
     # print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
     accuracy_lab(
         samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/armhf', 
-        arch='arm',
-        record_fpath='../resources/tmp3.txt'
+        arch='ARM:LE',
+        record_fpath='../output/accuracy_records.json'
     )

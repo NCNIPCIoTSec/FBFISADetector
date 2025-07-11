@@ -215,6 +215,10 @@
             "max_instr_length": 4, 
             "alignment_size": 2
         },
+        "registers": {
+            "special": ["lr", "pc", "sp", "r13", "r14", "r15"],
+            "general": ["r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12"]
+        },
         "SupportedEndian": "*"
     }
 }

@@ -1,13 +1,11 @@
+
 import re
 import json
-from tracemalloc import start
-from typing import Literal
 import pypcode
 import capstone as cps
+from queue import Queue
 from multiprocessing import Pool, cpu_count
 from multiprocessing.context import TimeoutError
-
-from sympy import N
 
 from evaluate.calc import calc_BlockRates, calc_BlockPairInstrRates
 from utils.config_processor import features_configure_init
@@ -279,7 +277,7 @@ class BinaryBlock:
 
             return [isa_info for isa_var in isa_variants if (isa_info := {"ghidra_arch": isa_var, "base_addr": base_address}) not in checked_variants]
         
-        def loop_check_variants(isa_info: dict) -> dict:
+        def loop_check_variants(isa_info: dict, block_offset, inner_pairs_addr:dict) -> dict:
             isa_var, base_addr = isa_info["ghidra_arch"], isa_info['base_addr']
             ctx= pypcode.Context(isa_var)
             # 反汇编分析：线性扫描算法
@@ -308,7 +306,7 @@ class BinaryBlock:
         if len(all_rvs_configs) > 0:
             pos_isa_variants = [isa_info[0] for isa_info in sorted(all_rvs_configs, key=lambda x: x[1])]
             for isa_info in pos_isa_variants:
-                reverse_engine_config = loop_check_variants(isa_info)
+                reverse_engine_config = loop_check_variants(isa_info, block_offset, inner_pairs_addr)
                 if reverse_engine_config is not None:
                     flag = True
                     break
@@ -317,7 +315,7 @@ class BinaryBlock:
         # 喊没有最终结果的话，测试剩余
         if not flag:
             for isa_info in get_remain_isa_info(checked_variants=pos_isa_variants):
-                reverse_engine_config = loop_check_variants(isa_info)
+                reverse_engine_config = loop_check_variants(isa_info, block_offset, inner_pairs_addr)
                 if reverse_engine_config is not None:
                     flag = True
                     break
@@ -367,11 +365,9 @@ class BlocksFilter:
         self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
         return self.have_pairs_blocks
     
-    def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False) -> list[BinaryBlock]:
+    def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False, display_error: bool = False) -> list[BinaryBlock]:
+        # 记录反汇编验证后的架构
         def record_reversing_result(blk_tag: int, rvs_res: tuple[bool, str, dict]):
-            '''
-            记录反汇编验证后的架构
-            '''
             is_reversed, engine, config_info = rvs_res
             if is_reversed:
                 hash_id = hash("".join([k+str(config_info[k]) for k in config_info.keys()]))
@@ -382,25 +378,27 @@ class BlocksFilter:
                 # record block id
                 self.reversed_ht_valid_blocks.append(blk_tag)
 
-        def process_callback(res):
-            # 子进程回调函数
-            blk_num, rvs_res = res
-            record_reversing_result(blk_tag=blk_num, rvs_res=rvs_res)
-            
         # 是否开启多进程
         if open_multi_processing:
             cpc = cpu_count()
             with Pool(processes=cpc) as pool:
+                process_num = 0
                 processes = []
                 for j in self.have_pairs_blocks:
-                    processes.append(pool.apply_async(func=self.sub_processing, args=(j, self.blocks[j]), callback=process_callback))
-                # TODO: 多进程再优化
+                    processes.append(
+                        pool.apply_async(func=self.sub_processing, args=(j, self.blocks[j]))  # 使用 apply_async 可以独立抓取异常退出，防止子进程无返回阻塞主进程
+                    )
+                    process_num += 1
+                # 多进程，等待第一个子进程返回结果，期间其他子进程可能也已完成结果并返回（使用轮询反而更慢）
                 for proc in processes:
                     try:
-                        proc.get(timeout=30)
+                        blk_num, rvs_res = proc.get(timeout=15)
+                        record_reversing_result(blk_tag=blk_num, rvs_res=rvs_res)
                     except TimeoutError:
-                        print('A Subprocess cannot return proper result!!!')
-                        pass
+                        if display_error:
+                            print('[BlocksFilter] Because of invalid bytes, a block cannot be reversed. A subprocess cannot return proper result!!!')
+                    finally:
+                        continue
         else:
             for j in self.have_pairs_blocks:
                 record_reversing_result(j, self.blocks[j].isGhidraReversedPairsValid())
@@ -411,6 +409,7 @@ class BlocksFilter:
 
 
 class BinaryAnalyzer:
+    open_multi_process = False
     supported_arch = dict()
     branch_calc_info = dict()
 
@@ -430,13 +429,22 @@ class BinaryAnalyzer:
         with open(file=branch_calc_info_path, mode='r', encoding='utf-8') as fr:
             cls.branch_calc_info = json.load(fp=fr)
 
-    def __init__(self, bin_file_path: str):
+    @classmethod
+    def openMultiProcessing(cls):
+        cls.open_multi_process = True
+    
+    @classmethod
+    def closeMultiProcessing(cls):
+        cls.open_multi_process = False
+    
+    def __init__(self, bin_file_path: str, display: bool = False):
         # 读取二进制文件内容
         self.binary_res = b''
         with open(file=bin_file_path, mode='rb') as fr:
             self.binary_res = fr.read()
+        self.display = display
 
-    def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict = None):
+    def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict = None, display_block_info: bool = False):
         '''
         指定特定架构和特定
         '''
@@ -473,8 +481,9 @@ class BinaryAnalyzer:
                 reverse_unit=reverse_unit
             )
             # 评估
-            # print(f'-------------------- {isa_arch}:{endian} --------------------')
-            # calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
+            if display_block_info:
+                print(f'-------------------- {isa_arch}:{endian} --------------------')
+                calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
             # ======================================== <指令对儿组合> ========================================
             # print([instr.hex() for instr, _, _ in possible_block_head])
             if k == 'BRANCH':
@@ -518,14 +527,14 @@ class BinaryAnalyzer:
         del blocks
         # 过滤
         blk_filter.filterBlocksByInnerPairs()
-        blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=True)  # 开启多进程
+        blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # 开启多进程
         # 评估
-        # print(f'-------------------- {isa_arch}:{endian} --------------------')
-        # calc_BlockRates(
-        #     blocks=len(blk_filter.blocks), 
-        #     blocks_with_pair=len(blk_filter.have_pairs_blocks), 
-        #     blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks)
-        # )
+        if display_block_info:
+            calc_BlockRates(
+                blocks=len(blk_filter.blocks), 
+                blocks_with_pair=len(blk_filter.have_pairs_blocks), 
+                blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks)
+            )
         # ======================================== <数据流分析> ========================================
         # for blk_index in blk_filter.reversed_ht_valid_blocks:
         #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
@@ -567,7 +576,7 @@ class BinaryAnalyzer:
         supported_endian = ['LE', 'BE'] if supported_endian == "*" else [supported_endian]
         # 分析
         for endian in supported_endian:
-            filter = self.archAnalysis(isa_arch=arch, endian=endian, ins_pair_dict=ins_pair_dict)
+            filter = self.archAnalysis(isa_arch=arch, endian=endian, ins_pair_dict=ins_pair_dict, display_block_info=self.display)
             pos_arch_blk_data, is_pos_arch = self.is_best_choice(
                 sample=(len(filter.blocks), len(filter.have_pairs_blocks), len(filter.reversed_ht_valid_blocks)), 
                 standards=pos_arch_blk_data
