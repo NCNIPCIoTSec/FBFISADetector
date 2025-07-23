@@ -22,7 +22,7 @@
   workon FirmISAIdentify
   ```
 **下载项目并下载依赖的库**  
-  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib  
+  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr
   - **需要github上自行下载的有：** capstone, pypcode  
   ```shell
   git clone https://github.com/NCNIPCIoTSec/FirmISAIdentify.git
@@ -78,11 +78,21 @@
 > 所以，我们基于模式抽取与指令间关系进行分析，提出一种非机器学习的专家系统方法进行指令集架构的识别。  
 
 ## 技术方法
+### 指令成对
 - ISA识别方法采用**指令对**的方式：  
-  **指令对：** 堆栈的 `push {lr, rx, ry}` 与 `pop {pc, rx, ry}` 指令、条件语句的 `cmp` 和 `bxx` 指令。我们将指令对的类型分为两大类，“块指令对”类型以及“块内指令对类型”。   
+  **指令对：** 堆栈的 `push {lr, rx, ry}` 与 `pop {pc, rx, ry}` 指令、条件语句的 `cmp` 和 `bxx` 指令。我们将指令对的类型分为两大类，“块指令对”类型以及“块内指令对类型”。  
+### 字节块分析过滤
+
+### 函数边界恢复技术 
+
 
 ## 评估
 - **测试集**  
   来自文章[ISADetect](https://dl.acm.org/doi/10.1145/3374664.3375742)总结的[*数据集*](https://etsin.fairdata.fi/dataset/80fa69af-addb-4f9a-b45c-c16011bae366/data)，此数据集仍是ELF文件为主，因为ELF具有详细的section信息（数据表名、代码函数名），方便实验时对代码区域的定位；  
   选择下载指令，如`wget --content-disposition "https://download.fairdata.fi:443/download?token=xxx"`，获取数据集以及机器学习模型；  
--   
+- **测试架构**  
+  **传感器设备：** AMR-Cortex-M、8051；  
+  **汽车电子领域：** ARM-Cortex-R、PowerPC、Tricore；  
+  **网络设备：** ARM-Cortex-A、MIPS；  
+  **工业设施：** ARM-Cortex-M、x86；  
+

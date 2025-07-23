@@ -12,29 +12,7 @@ from utils.config_processor import features_configure_init
 from utils.translator import hexString2bytes, string2bytes_regex
 from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
 from analysis.branch_analysis import get_branch_addr_multiprocessing
-
-
-CAPSTONE_PROCESSOR_ARCHITECTURES = {
-    "ARM": {
-        "ARCH": cps.CS_ARCH_ARM,
-        "MODES": [cps.CS_MODE_THUMB, cps.CS_MODE_ARM]
-    },
-    "TRICORE": {
-        "ARCH": cps.CS_ARCH_TRICORE,
-        "MODES": [cps.CS_MODE_TRICORE_180]
-    },
-    "MIPS": {
-        "ARCH": cps.CS_ARCH_MIPS,
-        "MODES": [
-            cps.CS_MODE_MIPS16, 
-            cps.CS_MODE_MIPS32,
-            cps.CS_MODE_MIPS64,
-            cps.CS_MODE_MIPS32R6, 
-            cps.CS_MODE_MIPS64R6, 
-            cps.CS_MODE_NANOMIPS
-        ]
-    }
-}
+from analysis.pcode_analysis import PcodeIR
 
 
 GHIDRA_PROCESSOR_ARCHITECTURES = {
@@ -70,16 +48,18 @@ class BinaryBlock:
     arch: str = None
     inner_pairs_list: list = None
     instructions_info: dict = {}
+    registers: dict = {}
     complete_binary = b''
 
     @classmethod
-    def loadConfigureInfo(cls, arch: str, inner_pairs_list: dict, instructions_info: dict):
+    def loadConfigureInfo(cls, arch: str, inner_pairs_list: dict, instructions_info: dict, registers: dict):
         """
         获取类的相关配置信息
         """
         cls.arch = arch.upper()
         cls.inner_pairs_list = inner_pairs_list
         cls.instructions_info = instructions_info
+        cls.registers = registers
         cls.reverse_engines = {"capstone": {}, "ghidra": {}}  # 逆向引擎的配置信息
         # TODO:其他参数，建议读取配置文件信息实现配置
         cls.reverse_unit = 2  # 字节序反转，按多少字节反转
@@ -113,6 +93,12 @@ class BinaryBlock:
         self.high_frequency_instr: list = []
         self.is_valid_block: bool = None  # record final judgement result - Boolean
         self.inner_pairs: list = []  # record pairs found by func-get_inner_block_pairs
+        # IR类
+        self.pcode = None
+
+    def block_boundary_recovering(self, pos_arch: str):
+        
+        pass
 
     def getInnerBlockPairs(self): 
         """
@@ -175,59 +161,6 @@ class BinaryBlock:
                         instr_class.add(eins.strip().lower())
 
             return instr_class
-    
-    def isCapstoneReversedPairsValid(self) -> tuple[bool, str, dict]:
-        """
-        TODO: 重新优化
-        Capstone 线性扫描逆向分析算法来分析“可能”为函数块
-        """
-        flag = False
-        reverse_engine_config = {"capstone_arch": None, "capstone_mode": None, "base_addr": None}
-        # 如果是CAPSTONE不支持的架构，不做过滤
-        if CAPSTONE_PROCESSOR_ARCHITECTURES.get(self.arch) is None:
-            return False, "capstone", reverse_engine_config
-
-        # print(self.binary.hex())
-        # 根据架构初始化
-        base_addr = 0x10000
-        capstone_arguments = CAPSTONE_PROCESSOR_ARCHITECTURES[self.arch]
-        if self.arch == 'ARM':
-            base_addr = 0x08000000
-        elif self.arch == 'TRICORE':
-            base_addr = 0x80000000
-        block_offset = base_addr + self.block_pair[0][1]
-        
-        # For Inner Pairs Check
-        inner_pairs_addr = {}
-        for pair_info in self.inner_pairs:
-            ins1, ins2 = pair_info["ins"]
-            for pair in pair_info["details"]:
-                inner_pairs_addr[block_offset + pair[0][1]] = self.instr_preprocess(ins1)
-                inner_pairs_addr[block_offset + pair[1][1]] = self.instr_preprocess(ins2)
-        # print(inner_pairs_addr)
-
-        # 反汇编分析：线性扫描算法
-        for cs_mode in capstone_arguments['MODES']:
-            cs_mode_with_endian = cs_mode | cps.CS_MODE_BIG_ENDIAN if self.endian == 'BE' else cs_mode | cps.CS_MODE_LITTLE_ENDIAN
-            md = cps.Cs(arch=capstone_arguments['ARCH'], mode=cs_mode_with_endian)
-            reverse_res = []
-            for ins in md.disasm(code=self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], offset=block_offset):
-                ins_addr, ins_bytes, ins_mnemonic, ins_op_str = ins.address, ins.bytes, ins.mnemonic.lower(), ins.op_str.lower()
-                if (inner_instr_set := inner_pairs_addr.get(ins_addr)) is not None and ins_mnemonic not in inner_instr_set:
-                    # print(f"0x{ins_addr:x}\t0x{bytes(ins_bytes).hex():8s}\t{ins_mnemonic}  {ins_op_str} | Exception is ({inner_instr_set})...")
-                    reverse_res.clear()
-                    break
-                reverse_res.append((ins_addr, ins_bytes, ins_mnemonic, ins_op_str))
-            # 首尾指令检测
-            if len(reverse_res) > 0 and ("*" in self.head_instr or reverse_res[0][2] in self.head_instr ) and ("*" in self.tail_instr or reverse_res[-1][2] in self.tail_instr):
-                # 标记flag
-                flag = True
-                reverse_engine_config["capstone_arch"] = capstone_arguments['ARCH']
-                reverse_engine_config["capstone_mode"] = cs_mode_with_endian
-                reverse_engine_config["base_addr"] = base_addr
-                break
-
-        return flag, "capstone", reverse_engine_config
     
     def isGhidraReversedPairsValid(self) -> tuple[bool, str, dict]:
         '''
@@ -322,27 +255,48 @@ class BinaryBlock:
         
         # print(flag, 'ghidra', reverse_engine_config)
         return flag, 'ghidra', reverse_engine_config
-
-    def getBelongedFunctionBlock(self):
+    
+    # TODO: 未完成
+    def isPCodeIRValid(self) -> bool:
         '''
-        FIXME: 存储机制已经修改，需注意
+        存储机制已经修改，需注意
         当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
         '''
-        ghidra_record = self.reverse_engines['ghidra']
-        if ghidra_record.get("ghidra_arch") is None:
-            print("[ERROR] <ARCH={self.arch}> Please check whether the block is a valid function block...")
-            return None
-        ctx = pypcode.Context(ghidra_record["ghidra_arch"])
-        try:
-            ghidra_disam = ctx.disassemble(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], ghidra_record["offset"])
-            print(ghidra_disam)
-            print("+" * 150)
-            ghidra_ir = ctx.translate(self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]], ghidra_record["offset"])
-            print(ghidra_ir)
-            print("=" * 150)
-        except Exception as e:
-            print(f"[ERROR] <ARCH={self.arch}> Disassemble/Translate failed: {e}")
-            return None
+        ghidra_config = self.reverse_engines.get('ghidra')
+        # 若无架构信息
+        if ghidra_config is None:
+            is_reversed, engine, config_info = self.isGhidraReversedPairsValid()
+            if not is_reversed:
+                return False
+            # 若可以被正常逆向
+            hash_id = hash("".join([k+str(config_info[k]) for k in config_info.keys()]))
+            # 记录反汇编架构信息
+            if self.reverse_engines[engine].get(hash_id) is None:
+                self.reverse_engines[engine][hash_id] = [config_info, 0]
+            self.reverse_engines[engine][hash_id][1] += 1
+            ghidra_config = self.reverse_engines[engine]
+        # 信息初始化
+        block_offset = self.block_pair[0][1]
+        if block_offset % self.alignment_bytes != 0:
+            block_offset = 0x10000001 + block_offset
+        analyzing_bytes = self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]]  # 要分析的字节
+        sorted_info = sorted(ghidra_config.values(), key=lambda tp: tp[-1], reverse=True)  # 从大到小排序
+        res = False
+        for cur_info in sorted_info:
+            base_addr = cur_info[0]['base_addr']
+            ctx = pypcode.Context(cur_info[0]['ghidra_arch'])
+            try:
+                pcode_ir = ctx.translate(analyzing_bytes, base_address=base_addr+block_offset)
+                pcode = PcodeIR(ir=str(pcode_ir), special_registers=self.registers['special'], general_registers=self.registers['general'])
+                if pcode.logic_analysis():
+                    res = True
+                    self.pcode = pcode
+                    break
+            except Exception as e:
+                print(f'ERROR: {e}')
+                continue
+
+        return res
 
 
 class BlocksFilter:
@@ -458,7 +412,8 @@ class BinaryAnalyzer:
         BinaryBlock.loadConfigureInfo(
             arch=isa_arch, 
             inner_pairs_list=ins_pair_dict['PAIRS']['INNER_BLOCK_PAIRS'], 
-            instructions_info=ins_pair_dict['INSTRUCTIONS']
+            instructions_info=ins_pair_dict['INSTRUCTIONS'],
+            registers=ins_pair_dict['OTHERS']['registers']
         )
         
         # 从BLOCK中识别
@@ -535,9 +490,9 @@ class BinaryAnalyzer:
                 blocks_with_pair=len(blk_filter.have_pairs_blocks), 
                 blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks)
             )
-        # ======================================== <数据流分析> ========================================
-        # for blk_index in blk_filter.reversed_ht_valid_blocks:
-        #     blk_filter.blocks[blk_index].getBelongedFunctionBlock()
+        # TODO: ======================================== <数据流分析> ========================================
+        for blk_index in blk_filter.reversed_ht_valid_blocks:
+            blk_filter.blocks[blk_index].isPCodeIRValid()
         return blk_filter
 
     @ staticmethod

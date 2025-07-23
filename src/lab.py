@@ -94,13 +94,15 @@ def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
 
 if __name__ == "__main__":
     import settings
+
+    BinaryAnalyzer.openMultiProcessing()
     
     sample_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/FreeRTOS_ThreadCreation_0x8000000.bin'
     elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
     # coverage_lab(bin_fpath=sample_path, elf_fpath=elf_path, storage_space_path='/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
     # print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
     accuracy_lab(
-        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/armhf', 
-        arch='ARM:LE',
-        record_fpath='../output/accuracy_records.json'
+        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips', 
+        arch='MIPS:BE',
+        record_fpath='../output/mips_accuracy_records.json'
     )
