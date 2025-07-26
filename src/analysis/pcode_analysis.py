@@ -1,3 +1,4 @@
+from enum import Flag
 import re
 
 
@@ -29,9 +30,13 @@ class PcodeIR:
         self.unique_var_life_zone = {}  # 变量"值"的生存区间
         self.var_expand_chain = {}  # 变量每个阶段的扩展结果
         self.var_undeclare_chain = []  # 未声明变量的记录 [path1_dict, path2_dict]
+        self.func_args_reg = set()
+        self.sub_func_args_send_reg = set()
+        self.sub_func_args_recv_reg = set()
         # 跳转表达式位置：跳转地址
         self.addr_goto = {}
         self.addr_if_goto = {}
+        self.cover_address = set()
         self.uncover_address = set()
         self.unknown_address = {'if-goto': [], 'goto': []}
         # 格式化运行
@@ -100,81 +105,93 @@ class PcodeIR:
 
     # FIXME: 存在无尽递归？
     # 递归形式仿真运行p-code代码，追踪未声明变量并记录（if-goto/goto ram[imm]）相关位置
-    def __run_expressions_simulation(self, row: int, cur_path_var_status: dict, traveled_nodes: set = set()):
+    def __run_expressions_simulation(self, row: int, cur_path_var_status: dict):
         # 边界条件1: row最大到最低端算式
         # 边界条件2: 一条路径中，每个节点只允许走过一次（防止while-loop导致死循环）
-        # print(f"{row} / {cur_path_var_status} / {traveled_nodes}")
-        if (row >= len(self.format_ir)) or (row in traveled_nodes):
-            self.var_undeclare_chain.append(cur_path_var_status)
-            return
-
+        # print(f"{row} / {cur_path_var_status}}")
         # 限制成局部变量
+        call_flag = False
         cur_path_var_status = cur_path_var_status.copy()
-        traveled_nodes = traveled_nodes.copy()
+        for cr in range(row, len(self.format_ir)):
+            if cr in self.cover_address:
+                self.var_undeclare_chain.append(cur_path_var_status)
+                break
 
-        # 当前表达式分析
-        if row in self.uncover_address:
-            self.uncover_address.remove(row)
-        _, exp_info = self.format_ir[row]
-        # print(exp_info)
-        p_var, p_exp, p_inner_var = exp_info
-        p_inner_var = p_inner_var.copy()
-        traveled_nodes.add(row) 
-        del exp_info
+            # 当前表达式分析
+            if cr in self.uncover_address:
+                self.uncover_address.remove(cr)
+            _, exp_info = self.format_ir[cr]
+            # print(exp_info)
+            p_var, p_exp, p_inner_var = exp_info
+            p_inner_var = p_inner_var.copy()
+            self.cover_address.add(cr) 
+            del exp_info
 
-        # 追踪每个变量值的状态
-        und_var_deliver = set()
-        if len(p_inner_var) > 0:
-            for sub_var in p_inner_var:
-                if re.search(r'ram\[[0-9a-fA-F]+:[0-9]+\]', sub_var) is not None:  # ram[imm:size]为指定地址位置，不当变量处理
-                    continue
-                all_status = cur_path_var_status.get(sub_var)
-                if all_status is None:
-                    und_var_deliver.add(sub_var)
-                    continue
-                newest_status = all_status[-1][1]
-                if newest_status == 'const':
-                    continue
-                und_var_deliver = und_var_deliver.union(newest_status)
-        if len(und_var_deliver) == 0:
-            und_var_deliver = 'const'
-        # 更新变量值的传递状态
-        if cur_path_var_status.get(p_var) is None:
-            cur_path_var_status[p_var] = []
-        cur_path_var_status[p_var].append((row, und_var_deliver))  # (current_var_ir_index, "const" or {undeclared_reg_rx, undeclared_reg_ry})
-            
-        # 处理跳转
-        if p_exp == '':
-            if p_var.startswith('goto '):  # JUMP
-                # 计算跳转位置
-                target_addr = p_inner_var.pop()
-                target_addr = re.sub(r':[0-9]+\]', ']', target_addr)
-                ir_pos = self.addr2ir_pos.get(target_addr)
-                if ir_pos is None:
+            # 追踪每个变量值的状态
+            und_var_deliver = set()
+            if len(p_inner_var) > 0:
+                for sub_var in p_inner_var:
+                    if re.search(r'ram\[[0-9a-fA-F]+:[0-9]+\]', sub_var) is not None:  # ram[imm:size]为指定地址位置，不当变量处理
+                        continue
+                    all_status = cur_path_var_status.get(sub_var)
+                    if all_status is None:
+                        und_var_deliver.add(sub_var)
+                        # 将寄存器分类 -> 子函数接收参数寄存器，主函数参数寄存器
+                        if sub_var in self.gen_reg:
+                            if call_flag:
+                                self.sub_func_args_recv_reg.add(sub_var)
+                                call_flag = False
+                            else:
+                                self.func_args_reg.add(sub_var)
+                        continue
+                    newest_status = all_status[-1][1]
+                    if newest_status == 'const':
+                        continue
+                    und_var_deliver = und_var_deliver.union(newest_status)
+            if len(und_var_deliver) == 0:
+                und_var_deliver = 'const'
+            # 更新变量值的传递状态
+            if cur_path_var_status.get(p_var) is None:
+                cur_path_var_status[p_var] = []
+            cur_path_var_status[p_var].append((cr, und_var_deliver))  # (current_var_ir_index, "const" or {undeclared_reg_rx, undeclared_reg_ry})
+                
+            # 处理跳转
+            if p_exp == '':
+                if p_var.startswith('goto '):  # JUMP
+                    # 计算跳转位置
+                    target_addr = p_inner_var.pop()
+                    target_addr = re.sub(r':[0-9]+\]', ']', target_addr)
+                    ir_pos = self.addr2ir_pos.get(target_addr)
+                    if ir_pos is None:
+                        ir_pos = -1
+                        self.unknown_address['goto'].append(target_addr)
+                        print(f'>> [CLASS PcodeIR] GotoSyntaxWarning: P-Code has "goto branch", but out of current block range - {target_addr}!!!')
+                    self.addr_goto[cr] = ir_pos
+                    # 直接跳转
+                    # 如果跳转位置不在当前块内地址，当成函数来处理
+                    if ir_pos != -1:
+                        return self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status)
+                elif p_var.startswith('if '):  # IF-THEN
+                    # 计算跳转位置
                     ir_pos = -1
-                    self.unknown_address['goto'].append(target_addr)
-                    print(f'[Error] P-Code has "goto branch", but out of current block range - {target_addr}!!!')
-                self.addr_goto[row] = ir_pos
-                # 直接跳转
-                # 如果跳转位置不在当前块内地址，当成函数来处理
-                if ir_pos != -1:
-                    return self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status, traveled_nodes=traveled_nodes)
-            elif p_var.startswith('if '):  # IF-THEN
-                # 计算跳转位置
-                target_addr = [iv for iv in p_inner_var if iv.startswith('ram')][0]
-                target_addr = re.sub(r':[0-9]+\]', ']', target_addr)
-                ir_pos = self.addr2ir_pos.get(target_addr)
-                if ir_pos is None:
-                    ir_pos = -1
-                    self.unknown_address['if-goto'].append(target_addr)
-                    print(f'[Error] P-Code has "if-then goto branch", but out of current block range - {target_addr}!!!')
-                self.addr_if_goto[row] = ir_pos
-                if ir_pos == -1:  # 异常跳转，阻塞，直接返回结果
-                    self.var_undeclare_chain.append(cur_path_var_status)
-                    return
-                self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status, traveled_nodes=traveled_nodes)
-        # 下一条表达式
-        self.__run_expressions_simulation(row=row+1, cur_path_var_status=cur_path_var_status, traveled_nodes=traveled_nodes)
+                    target_addr = [iv for iv in p_inner_var if iv.startswith('ram')]
+                    if len(target_addr) == 0:  # 转跳地址为常数（非块内），当成函数处理
+                        print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {p_var}!!!')
+                    else:
+                        target_addr = re.sub(r':[0-9]+\]', ']', target_addr[0])
+                        ir_pos = self.addr2ir_pos.get(target_addr)
+                        if ir_pos is None:
+                            ir_pos = -1
+                            self.unknown_address['if-goto'].append(target_addr)
+                            print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {target_addr}!!!')
+                    self.addr_if_goto[cr] = ir_pos
+                    if ir_pos == -1:  # FIXME: 异常跳转，阻塞路径（即，添加异常点，使得if后路径不通）
+                        self.var_undeclare_chain.append(cur_path_var_status)
+                        continue
+                    # 执行跳转
+                    self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status)
+                elif p_var.startswith('call'):
+                    call_flag = True
     
     # FIXME: 持续检测是否存在逻辑问题
     # 未声明变量追踪 & 跳转解析 & 生命区间重组
@@ -182,6 +199,7 @@ class PcodeIR:
         # 跳转解析，重组运行路径
         print('>> [CLASS PcodeIR] SIMULATE IR-RUNNING...')
         self.__run_expressions_simulation(row=0, cur_path_var_status={})
+        print(">> [CLASS PcodeIR] SIMULATE IR DONE!!!")
         # 记录所有（if-then）goto的位置以及跳转位置
         it_goto_info = self.addr_if_goto
         goto_info = self.addr_goto
@@ -248,6 +266,7 @@ class PcodeIR:
                 sub_zones.append((ns, ne+1))
                 new_zones.append(sub_zones)
             self.unique_var_life_zone[cvar]['zones'] = new_zones
+        print('>> [CLASS PcodeIR] REMAKE ZONES DONE!!!')
 
     # TODO: 分析可能的参数寄存器
     def __undeclared_variables_analysis(self):    
@@ -262,6 +281,9 @@ class PcodeIR:
                 context_save_addr[cur_var] = set()
             context_save_addr[cur_var] = context_save_addr[cur_var].union(all_reg)
 
+        print('>> [CLASS PcodeIR] FUNC-ARG-REG & SPECIAL-REG ANALYSIS...')
+        # print('a. merge all paths...')
+        # FIXME: 优化；
         # 将var_undeclare_chain不同路径合并
         merged_var_undeclare_chain = {}
         # print(self.var_undeclare_chain)
@@ -273,6 +295,7 @@ class PcodeIR:
                     if stat_node not in merged_var_undeclare_chain[var]:
                         merged_var_undeclare_chain[var].append(stat_node)
         
+        # print('b. get all undeclared variables...')
         # 统计未声明变量，为分析“参数传递寄存器”的可能做准备
         und_args_freq = {}  # “寄存器”：“未声明次数”
         context_save_addr = {}  # “地址”：“存储的未声明寄存器”
@@ -306,14 +329,15 @@ class PcodeIR:
                     elif unv in spec_reg_mix:  # 如果是特殊寄存器，记录
                         reg_result['special-registers'].add(unv)
             record_pos_context_addr(cur_var=cvar, all_reg=pre_reg)
-
+        
+        # print('c. analyze undeclared variables...')
         # 筛选
         # 若“保存上下文的地址区域内的寄存器”出现未声明的情况，则认为矛盾
         # 被上下文保存的寄存器存在以下特点：
         # a. 存储了特殊寄存器
         # b. 寄存器未声明次数 = 1
         pos_ram = []
-        func_args_reg = set(und_args_freq.keys())
+        all_func_args_reg = set(und_args_freq.keys())
         for ram, reg in context_save_addr.items():
             special_reg = set([r for r in reg if r not in self.gen_reg])
             if len(special_reg) == 0: 
@@ -321,10 +345,11 @@ class PcodeIR:
             error_reg = set([r for r in (reg - special_reg) if und_args_freq.get(r) is None or len(und_args_freq[r]) > 1])
             if len(error_reg) > 0:
                 continue
-            print(ram, reg)
-            func_args_reg -= reg
+            all_func_args_reg -= reg
             pos_ram.append(ram)
-        reg_result['func-args'] = func_args_reg
+        self.func_args_reg = self.func_args_reg.intersection(all_func_args_reg)
+        self.sub_func_args_recv_reg = self.sub_func_args_recv_reg.intersection(all_func_args_reg)
+        reg_result['func-args'] = all_func_args_reg
         del und_args_freq, context_save_addr
 
         return reg_result
@@ -357,9 +382,16 @@ class PcodeIR:
                     # 在区间内进行分析
                     for _, exp_info in self.format_ir[s:e]:
                         if cvar in exp_info[-1]:  # 如果当前变量在区间内出现过，认为合规；
+                            if cvar in self.sub_func_args_send_reg:
+                                self.sub_func_args_send_reg.remove(cvar)
                             all_valid_exp[zone_tag].append("BE-USED")
-                        elif exp_info[0].startswith('call') or exp_info[0].startswith('return'):  # 如果区间内有函数调用、函数返回，疑似参数传递寄存器。
-                            if cvar in self.gen_reg or pos_reg_name in ['pc', 'lr', 'ra', 'ISAModeSwitch']:
+                            continue
+                        # 如果区间内有函数调用、函数返回，疑似参数传递寄存器
+                        if exp_info[0].startswith('call') or exp_info[0].startswith('return'): 
+                            if cvar in self.gen_reg:
+                                self.sub_func_args_send_reg.add(cvar)
+                                all_valid_exp[zone_tag].append("FUNC-ARGS-REG")
+                            elif pos_reg_name in ['pc', 'lr', 'ra', 'ISAModeSwitch']:
                                 all_valid_exp[zone_tag].append("FUNC-ARGS-REG")
                     # 未被使用，检查是否跨指令，若是一条指令内的，认为是p-code翻译机制的问题，pass
                     if len(all_valid_exp[zone_tag]) == 0 and self.format_ir[s][0] == self.format_ir[e-1][0]:
@@ -367,28 +399,29 @@ class PcodeIR:
         
         return all_valid_exp
     
-    # 分析当前P-CODE IR的逻辑正确性
+    # FIXME: 分析当前P-CODE IR的逻辑正确性
     def logic_analysis(self) -> bool:
-        print('>> [CLASS PcodeIR] Logic Analysis...')
-        res = True
         # 未覆盖区域
         if len(self.uncover_address) > 0:
-            print("UNCOVER_IR_ROW: ", self.uncover_address)
+            # print("UNCOVER_IR_ROW: ", self.uncover_address)
+            print('>> [CLASS PcodeIR] Logic Analysis ==> WOOPS!! EXITS UNCOVER-IR-ROW!!!')
             return False
-        print('Congratulation!! UNCOVER_IR_ROW VALID!!!')
+        print('>> [CLASS PcodeIR] Logic Analysis ==> Congratulation!! UNCOVER_IR_ROW VALID!!!')
         
         # 变量声明，未使用
         vlz = self.__variables_life_zone_analysis()
         for zv_tag, all_zones_stat in vlz.items():
             for stat in all_zones_stat:
                 if len(stat) == 0:
-                    print('UNUSED-DECLARED-VAR:', zv_tag)
-                    res = False
-        if not res:
-            return res
-        print('Congratulation!! UNUSED-DECLARED-VAR VALID!!!')
+                    print('>> [CLASS PcodeIR] Logic Analysis ==> UNUSED-DECLARED-VAR:', zv_tag)
+                    return False
+        print('>> [CLASS PcodeIR] Logic Analysis ==> Congratulation!! UNUSED-DECLARED-VAR VALID!!!')
+
         # 变量未声明，但被使用
-        und_reg = self.__undeclared_variables_analysis()
+        self.__undeclared_variables_analysis()
+        # print('>> [CLASS PcodeIR] Logic Analysis ==> UNKNOWN-FUNC-ARGS:', self.func_args_reg, ' ? ' ,self.sub_func_args_recv_reg)
+          
+        print(f'>> [CLASS PcodeIR] Logic Analysis ==> Congratulation!! GET-KNOW-FUNC-ARGS={self.func_args_reg} | SUB-FUNC-SEND={self.sub_func_args_send_reg} | SUB-FUNC-RECV={self.sub_func_args_recv_reg}!!!')
         
         return True
 

@@ -2,8 +2,6 @@
 import re
 import json
 import pypcode
-import capstone as cps
-from queue import Queue
 from multiprocessing import Pool, cpu_count
 from multiprocessing.context import TimeoutError
 
@@ -176,7 +174,7 @@ class BinaryBlock:
         # ============== 块内指令对检测（初始化） ==============
         block_offset = self.block_pair[0][1]
         if block_offset % self.alignment_bytes != 0:
-            block_offset = 0x10000001 + block_offset
+            block_offset = 0xf0000001 + (0x0fffffff & block_offset)
         # 块内检测
         inner_pairs_addr = {}
         for pair_info in self.inner_pairs:
@@ -199,6 +197,8 @@ class BinaryBlock:
                 base_address = 0x08000000
             elif self.arch == 'TRICORE':
                 base_address = 0x80000000
+            elif self.arch == 'MIPS':
+                base_address = 0x1FC00000 
 
             # 当前指令集架构的所有变体
             ghidra_arch_name = GHIDRA_PROCESSOR_ARCHITECTURES[self.arch]["GHIDRA_ARCH_NAME"]
@@ -262,6 +262,8 @@ class BinaryBlock:
         存储机制已经修改，需注意
         当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
         '''
+        print('-'*150)
+        print(">>> [CLASS BinaryBlock] IR Analysis...")
         ghidra_config = self.reverse_engines.get('ghidra')
         # 若无架构信息
         if ghidra_config is None:
@@ -278,24 +280,30 @@ class BinaryBlock:
         # 信息初始化
         block_offset = self.block_pair[0][1]
         if block_offset % self.alignment_bytes != 0:
-            block_offset = 0x10000001 + block_offset
+            block_offset = 0xf0000001 + (0x0fffffff & block_offset)
         analyzing_bytes = self.complete_binary[self.block_pair[0][1]: self.block_pair[1][2]]  # 要分析的字节
         sorted_info = sorted(ghidra_config.values(), key=lambda tp: tp[-1], reverse=True)  # 从大到小排序
         res = False
         for cur_info in sorted_info:
             base_addr = cur_info[0]['base_addr']
-            ctx = pypcode.Context(cur_info[0]['ghidra_arch'])
+            arch = cur_info[0]['ghidra_arch']
+            ctx = pypcode.Context(arch)
+            # MIPS架构需要延迟槽来满足5级流水线
+            delay_slot = b""
+            if arch.startswith("MIPS"):
+                delay_slot = b"\x00\x00\x00\x00"
+            # 分析
             try:
-                pcode_ir = ctx.translate(analyzing_bytes, base_address=base_addr+block_offset)
+                pcode_ir = ctx.translate(analyzing_bytes+delay_slot, base_address=base_addr+block_offset)
                 pcode = PcodeIR(ir=str(pcode_ir), special_registers=self.registers['special'], general_registers=self.registers['general'])
                 if pcode.logic_analysis():
                     res = True
                     self.pcode = pcode
                     break
             except Exception as e:
-                print(f'ERROR: {e}')
+                print(f'>>> [CLASS BinaryBlock] ERROR: {e}')
                 continue
-
+                
         return res
 
 
@@ -491,8 +499,15 @@ class BinaryAnalyzer:
                 blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks)
             )
         # TODO: ======================================== <数据流分析> ========================================
+        FT, TT =0, 0
         for blk_index in blk_filter.reversed_ht_valid_blocks:
-            blk_filter.blocks[blk_index].isPCodeIRValid()
+            if blk_filter.blocks[blk_index].isPCodeIRValid():
+                TT += 1
+            else:
+                FT += 1
+        if TT > 0 or FT > 0:
+            pv_rate = TT/(TT+FT)*100
+            print(f'PCODE-VALID: {TT}/{(TT+FT)}={pv_rate:.2f}%')
         return blk_filter
 
     @ staticmethod
