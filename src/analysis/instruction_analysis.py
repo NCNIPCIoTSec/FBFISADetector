@@ -295,8 +295,9 @@ class BinaryBlock:
             # 分析
             try:
                 pcode_ir = ctx.translate(analyzing_bytes+delay_slot, base_address=base_addr+block_offset)
+                # print(pcode_ir)
                 pcode = PcodeIR(ir=str(pcode_ir), special_registers=self.registers['special'], general_registers=self.registers['general'])
-                if pcode.logic_analysis():
+                if pcode.logic_analysis(debug_mode=True):
                     res = True
                     self.pcode = pcode
                     break

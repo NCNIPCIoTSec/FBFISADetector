@@ -1,5 +1,7 @@
-from enum import Flag
+from itertools import count
 import re
+import sys
+from tokenize import Special
 
 
 # P-Code IR 分析器
@@ -24,18 +26,22 @@ class PcodeIR:
         self.ir = ir
         self.spec_reg = special_registers
         self.gen_reg = tuple(set(general_registers))
+        self.registers = set(general_registers).union(self.get_special_registers())
         # 变量记录
         self.addr2ir_pos = {}
         self.format_ir = []
         self.unique_var_life_zone = {}  # 变量"值"的生存区间
         self.var_expand_chain = {}  # 变量每个阶段的扩展结果
         self.var_undeclare_chain = []  # 未声明变量的记录 [path1_dict, path2_dict]
+        self.context_storage_reg = {}
+        # 函数相关寄存器（消去一部分后剩余）
         self.func_args_reg = set()
-        self.sub_func_args_send_reg = set()
-        self.sub_func_args_recv_reg = set()
+        self.sub_func_args_send_reg = {}
+        self.sub_func_args_recv_reg = {}
         # 跳转表达式位置：跳转地址
         self.addr_goto = {}
         self.addr_if_goto = {}
+        self.addr_call_func = {}
         self.cover_address = set()
         self.uncover_address = set()
         self.unknown_address = {'if-goto': [], 'goto': []}
@@ -103,16 +109,16 @@ class PcodeIR:
             return cur_var, cur_exp
         return "", whole_exp
 
-    # FIXME: 存在无尽递归？
     # 递归形式仿真运行p-code代码，追踪未声明变量并记录（if-goto/goto ram[imm]）相关位置
     def __run_expressions_simulation(self, row: int, cur_path_var_status: dict):
         # 边界条件1: row最大到最低端算式
         # 边界条件2: 一条路径中，每个节点只允许走过一次（防止while-loop导致死循环）
         # print(f"{row} / {cur_path_var_status}}")
         # 限制成局部变量
-        call_flag = False
+        last_func_pos = -1
         cur_path_var_status = cur_path_var_status.copy()
         for cr in range(row, len(self.format_ir)):
+            # 如果处理过，不做处理
             if cr in self.cover_address:
                 self.var_undeclare_chain.append(cur_path_var_status)
                 break
@@ -125,7 +131,6 @@ class PcodeIR:
             p_var, p_exp, p_inner_var = exp_info
             p_inner_var = p_inner_var.copy()
             self.cover_address.add(cr) 
-            del exp_info
 
             # 追踪每个变量值的状态
             und_var_deliver = set()
@@ -136,11 +141,12 @@ class PcodeIR:
                     all_status = cur_path_var_status.get(sub_var)
                     if all_status is None:
                         und_var_deliver.add(sub_var)
-                        # 将寄存器分类 -> 子函数接收参数寄存器，主函数参数寄存器
+                        # FIXME: 将寄存器分类 -> 子函数接收参数寄存器，主函数参数寄存器
                         if sub_var in self.gen_reg:
-                            if call_flag:
-                                self.sub_func_args_recv_reg.add(sub_var)
-                                call_flag = False
+                            if last_func_pos > -1 and 0 < (cr - last_func_pos):
+                                if self.sub_func_args_recv_reg.get(sub_var) is None:
+                                    self.sub_func_args_recv_reg[sub_var] = set()
+                                self.sub_func_args_recv_reg[sub_var].add((cr, last_func_pos))
                             else:
                                 self.func_args_reg.add(sub_var)
                         continue
@@ -164,7 +170,7 @@ class PcodeIR:
                     ir_pos = self.addr2ir_pos.get(target_addr)
                     if ir_pos is None:
                         ir_pos = -1
-                        self.unknown_address['goto'].append(target_addr)
+                        self.unknown_address['goto'].append(cr)
                         print(f'>> [CLASS PcodeIR] GotoSyntaxWarning: P-Code has "goto branch", but out of current block range - {target_addr}!!!')
                     self.addr_goto[cr] = ir_pos
                     # 直接跳转
@@ -182,16 +188,18 @@ class PcodeIR:
                         ir_pos = self.addr2ir_pos.get(target_addr)
                         if ir_pos is None:
                             ir_pos = -1
-                            self.unknown_address['if-goto'].append(target_addr)
+                            self.unknown_address['if-goto'].append(cr)
                             print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {target_addr}!!!')
                     self.addr_if_goto[cr] = ir_pos
                     if ir_pos == -1:  # FIXME: 异常跳转，阻塞路径（即，添加异常点，使得if后路径不通）
                         self.var_undeclare_chain.append(cur_path_var_status)
-                        continue
+                        break
                     # 执行跳转
                     self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status)
                 elif p_var.startswith('call'):
-                    call_flag = True
+                    if self.addr_call_func.get(cr) is None:
+                        self.addr_call_func[cr] = exp_info
+                    last_func_pos = cr
     
     # FIXME: 持续检测是否存在逻辑问题
     # 未声明变量追踪 & 跳转解析 & 生命区间重组
@@ -271,88 +279,161 @@ class PcodeIR:
     # TODO: 分析可能的参数寄存器
     def __undeclared_variables_analysis(self):    
         # 记录可能得保存上下文的地址
-        def record_pos_context_addr(cur_var: str, all_reg: set):
-            if not (len(all_reg) > 1 and cur_var.startswith('ram')):
-                return
-            # 解析ram内的变量
-            
+        def record_pos_context_addr(ram_addr: str, all_reg: set, record_addr: dict, continuous: bool = True):
+            if not ram_addr.startswith('ram'):
+                return record_addr
             # 记录
-            if context_save_addr.get(cur_var) is None:
-                context_save_addr[cur_var] = set()
-            context_save_addr[cur_var] = context_save_addr[cur_var].union(all_reg)
+            if record_addr.get(ram_addr) is None:
+                record_addr[ram_addr] = [set()]
+            # 是否是连续压栈/出栈存储
+            if not continuous:
+                if len(record_addr[ram_addr][-1]) > 0:
+                    record_addr[ram_addr].append(set())
+            record_addr[ram_addr][-1] = record_addr[ram_addr][-1].union(all_reg)
+            return record_addr
 
-        print('>> [CLASS PcodeIR] FUNC-ARG-REG & SPECIAL-REG ANALYSIS...')
-        # print('a. merge all paths...')
-        # FIXME: 优化；
-        # 将var_undeclare_chain不同路径合并
-        merged_var_undeclare_chain = {}
-        # print(self.var_undeclare_chain)
-        for path_info in self.var_undeclare_chain:
-            for var, stat_chain in path_info.items():
-                if merged_var_undeclare_chain.get(var) is None:
-                    merged_var_undeclare_chain[var] = []
-                for stat_node in stat_chain:
-                    if stat_node not in merged_var_undeclare_chain[var]:
-                        merged_var_undeclare_chain[var].append(stat_node)
-        
+        # 分析未声明变量
+        def undeclared_var_analysis(chain_path: dict, results: dict) -> dict:
+            for cvar, chain in chain_path.items():
+                last_ir, dis, con_count, pre_reg = -1, 0, 0, set()
+                for ir_ind, unv_set in chain:
+                    # ===================> 内存分析
+                    if cvar.startswith('ram'):
+                        #  ------------------ 分析是否为常量 
+                        if unv_set == "const":
+                            con_count = 0
+                            if len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                                results[cvar][-1] = results[cvar][-1].union(pre_reg)  # 记录某地址之前连续存储的寄存器
+                            pre_reg.clear()  # 当中间出现常量，认为是上下文保存的地址的概率较低，清除记录
+                            continue
+                        # ------------------- 分析指令间距离 / 指令间距离不再均衡，认为不连续
+                        temp_dis = dis
+                        dis = ir_ind - last_ir
+                        if con_count == 0:
+                            results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
+                        elif con_count > 1 and (temp_dis != dis):
+                            if len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                                results[cvar][-1] = results[cvar][-1].union(pre_reg)  
+                            pre_reg.clear()
+                            con_count = 0
+                            results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
+                        pre_reg = pre_reg.union(unv_set)
+                        con_count += 1
+                        last_ir = ir_ind
+                    # ===================>  分析寄存器集合内的寄存器，并记录
+                    for unv in unv_set:
+                        if unv in self.gen_reg:
+                            # 记录当前寄存器未声明位置
+                            if und_args_freq.get(unv) is None:
+                                und_args_freq[unv] = set()
+                            und_args_freq[unv].add(ir_ind)
+                # 如果存放未声明变量，记录
+                if len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                    results[cvar][-1] = results[cvar][-1].union(pre_reg)  
+
+            return results
+
         # print('b. get all undeclared variables...')
-        # 统计未声明变量，为分析“参数传递寄存器”的可能做准备
-        und_args_freq = {}  # “寄存器”：“未声明次数”
-        context_save_addr = {}  # “地址”：“存储的未声明寄存器”
-        reg_result = {'special-registers': set(), 'func-args': set()}
-        spec_reg_mix = self.get_special_registers()
         # 1. 记录可能的“上下文保存地址”
         # 2. 记录可能的“函数传参寄存器”
-        for cvar, chain in merged_var_undeclare_chain.items():
-            pre_reg = set()
-            for ir_ind, unv_set in chain:
-                if unv_set == "const":
-                    record_pos_context_addr(cur_var=cvar, all_reg=pre_reg)  # 记录某地址之前连续存储的寄存器
-                    pre_reg.clear()  # 当中间出现常量，认为是上下文保存的地址的概率较低，清除记录
-                    continue
-                pre_reg = pre_reg.union(unv_set)
-                # 分析寄存器集合内的寄存器，并记录
-                for unv in unv_set:
-                    if unv in self.gen_reg:
-                        # FIXME: （需要普适性验证）如果是子函数传参，给参数赋值，不做记录
-                        # 形如：
-                        # addr1: call ram[address]
-                        # addr2: mov r3, r0  ;r0可能未被声明即使用，有可能作为参数传递寄存器
-                        whole_exp = self.format_ir[ir_ind-1][1]
-                        if ir_ind > 0 and whole_exp[0].lower().startswith('call'):
-                            # print(self.format_ir[ir_ind-1], '==>', self.format_ir[ir_ind])
-                            continue
-                        # 记录当前寄存器未声明次数
-                        if und_args_freq.get(unv) is None:
-                            und_args_freq[unv] = []
-                        und_args_freq[unv].append(ir_ind)
-                    elif unv in spec_reg_mix:  # 如果是特殊寄存器，记录
-                        reg_result['special-registers'].add(unv)
-            record_pos_context_addr(cur_var=cvar, all_reg=pre_reg)
-        
-        # print('c. analyze undeclared variables...')
-        # 筛选
-        # 若“保存上下文的地址区域内的寄存器”出现未声明的情况，则认为矛盾
-        # 被上下文保存的寄存器存在以下特点：
-        # a. 存储了特殊寄存器
-        # b. 寄存器未声明次数 = 1
-        pos_ram = []
-        all_func_args_reg = set(und_args_freq.keys())
-        for ram, reg in context_save_addr.items():
-            special_reg = set([r for r in reg if r not in self.gen_reg])
-            if len(special_reg) == 0: 
-                continue
-            error_reg = set([r for r in (reg - special_reg) if und_args_freq.get(r) is None or len(und_args_freq[r]) > 1])
-            if len(error_reg) > 0:
-                continue
-            all_func_args_reg -= reg
-            pos_ram.append(ram)
-        self.func_args_reg = self.func_args_reg.intersection(all_func_args_reg)
-        self.sub_func_args_recv_reg = self.sub_func_args_recv_reg.intersection(all_func_args_reg)
-        reg_result['func-args'] = all_func_args_reg
-        del und_args_freq, context_save_addr
+        # 统计未声明变量，为分析“参数传递寄存器”的可能做准备
+        lir = len(self.format_ir)-1
+        und_args_freq = {}  # “寄存器”：“未声明次数”
+        context_save_addr = {}  # “地址”：“存储的未声明寄存器”
+        context_load_addr = {}  # “地址”：“从此地址出栈到寄存器但未使用”
+        processed_addr = set()
+        for chain_path in self.var_undeclare_chain:
+            context_save_addr = undeclared_var_analysis(chain_path=chain_path, results=context_save_addr)
+        del processed_addr
+            
+        # 统计未使用变量，是否存在连续的未使用变量，存储到相同地址
+        for reg, pos_set in self.sub_func_args_send_reg.items():
+            for pos in pos_set:
+                declare_pos, call_pos = pos
+                if call_pos == lir:
+                    _, exp_info = self.format_ir[declare_pos]
+                    exp = exp_info[1].strip()
+                    if not exp.startswith('ram'):
+                        continue
+                    if context_load_addr.get(exp) is None:
+                        context_load_addr = record_pos_context_addr(ram_addr=exp, all_reg=set(), record_addr=context_load_addr, continuous=False)
+                    context_load_addr = record_pos_context_addr(ram_addr=exp, all_reg={reg}, record_addr=context_load_addr)
 
-        return reg_result
+        # print('c. analyze undeclared variables...')
+        # 是否存在上下文保存区域，分析并筛选掉一部分用于上下文保存的未声明变量
+        sp_reg = set()
+        pc_reg = set()
+        for k, n in self.spec_reg.items():   # 获取 SP/PC/LR/RA 的全部名称
+            if n == "sp":
+                sp_reg.add(k)
+                sp_reg.add(n)
+                continue
+            if n in {"pc", "ra", "lr"}:
+                pc_reg.add(k)
+                pc_reg.add(n)
+        # 压栈内容分析
+        all_spec_reg = self.get_special_registers()
+        record_save_reg = set()
+        record_possible_ret_arg = set()
+        for ram, push_reg_zones in context_save_addr.items():
+            pop_reg = context_load_addr.get(ram)
+            if pop_reg is None:
+                continue
+            pop_reg = pop_reg[0]
+            max_intersection, proper_push_reg = 0, set()
+            for push_reg in push_reg_zones:
+                if len(push_reg) == 0:
+                    continue
+                # 被上下文保存的寄存器存在以下特点：
+                # a. 存储了特殊寄存器 = PC/LR/RA/SP；b. 有压栈信息，也有出栈信息，且压栈和出栈内容一致；
+                cur_pc_reg = None
+                cur_sp_reg = None
+                for r in push_reg:
+                    if r in pc_reg:
+                        cur_pc_reg = r
+                    elif r in sp_reg:
+                        cur_sp_reg = r
+                # 没有返回地址、栈指针保存，pass
+                if cur_pc_reg is None or cur_sp_reg is None:
+                    continue
+                # 压栈、出栈的寄存器内容不一致，pass
+                temp_intersection = len(push_reg.intersection(pop_reg))
+                if temp_intersection > max_intersection:
+                    max_intersection = temp_intersection
+                    proper_push_reg = push_reg
+            # 上下文存储
+            if max_intersection > 0:
+                if self.context_storage_reg.get(ram) is None:
+                    self.context_storage_reg[ram] = set()
+                self.context_storage_reg[ram] = proper_push_reg
+                record_save_reg = record_save_reg.union(proper_push_reg - all_spec_reg)
+                record_possible_ret_arg = pop_reg - record_save_reg
+        # 记录函数相关寄存器
+        self.func_args_reg = self.func_args_reg - record_save_reg
+        
+        # Display
+        print("*" * 150)
+        print("√ CONTEXT-STORE-ADDR:", context_save_addr)
+        print("√ CONTEXT-LOAD-ADDR:", context_load_addr)
+        print("√ Upper Context Storage:", self.context_storage_reg)
+        print("*" * 150)
+        print("√ The Position of UNKNOWN Goto:", self.unknown_address['goto'])
+        print("√ The Position of Call / Ret:", self.addr_call_func)
+        print("√ The Possible Return-arguments:", record_possible_ret_arg)
+        print("√ The Position where Registers are Undeclared at: ", und_args_freq)
+        print("√ The Possible Function Arguments:", self.func_args_reg)
+        print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
+        print("√ The Possible Sub-Function Receive Arguments:", self.sub_func_args_recv_reg)
+        print("*" * 150)
+        del context_load_addr, context_save_addr
+        
+        # FIXME: 有问题的寄存器反馈
+        error_reg = set()
+        for r in record_save_reg:  # 压栈的寄存器未声明次数仅限一次
+            if len(und_args_freq.get(r)) > 1:
+                error_reg.add(r)
+
+        return error_reg
     
     # TODO: 变量值生命区间内使用情况分析
     def __variables_life_zone_analysis(self) -> dict:
@@ -376,54 +457,91 @@ class PcodeIR:
                 zone_tag = f'{cvar}-z{ind}'
                 all_valid_exp[zone_tag] = []
                 # print('>> ', end= '')
+                start_addr = zones[ind][0][0]
+                call_func_addr = set()
+                # print('+' * 150)
+                record_passed_node = set()
                 for zone in zones[ind]:
                     s, e = zone
-                    # print(f'[{self.format_ir[s][0]}, {self.format_ir[e-1][0]}]', end=' --NextZone--> ')
                     # 在区间内进行分析
-                    for _, exp_info in self.format_ir[s:e]:
+                    for ir_ind, ir_info in enumerate(self.format_ir[s:e]):
+                        ir_ind = s + ir_ind
+                        if ir_ind in record_passed_node:
+                            continue
+                        record_passed_node.add(ir_ind)
+                        _, exp_info = ir_info
                         if cvar in exp_info[-1]:  # 如果当前变量在区间内出现过，认为合规；
-                            if cvar in self.sub_func_args_send_reg:
-                                self.sub_func_args_send_reg.remove(cvar)
                             all_valid_exp[zone_tag].append("BE-USED")
                             continue
                         # 如果区间内有函数调用、函数返回，疑似参数传递寄存器
-                        if exp_info[0].startswith('call') or exp_info[0].startswith('return'): 
+                        if exp_info[0].startswith('call') or exp_info[0].startswith('return') or (ir_ind in self.unknown_address['goto']): 
                             if cvar in self.gen_reg:
-                                self.sub_func_args_send_reg.add(cvar)
+                                call_func_addr.add(ir_ind)
                                 all_valid_exp[zone_tag].append("FUNC-ARGS-REG")
                             elif pos_reg_name in ['pc', 'lr', 'ra', 'ISAModeSwitch']:
                                 all_valid_exp[zone_tag].append("FUNC-ARGS-REG")
                     # 未被使用，检查是否跨指令，若是一条指令内的，认为是p-code翻译机制的问题，pass
-                    if len(all_valid_exp[zone_tag]) == 0 and self.format_ir[s][0] == self.format_ir[e-1][0]:
+                    if len(all_valid_exp[zone_tag]) == 0:
+                        if self.format_ir[s][0] == self.format_ir[e-1][0]:
+                            all_valid_exp[zone_tag].append('PCode-Translate-Warning')
+                if len(all_valid_exp[zone_tag]) == 0:
+                    if not (cvar.startswith('unique') or cvar.startswith('ram') or cvar in self.registers):  # 忽略翻译导致的问题（生成的临时变量但未被使用）
                         all_valid_exp[zone_tag].append('PCode-Translate-Warning')
-        
+                    # else:
+                    #     print(f"√ Register({cvar} | {self.format_ir[start_addr][1]}) is highly possible not used!")
+                # 函数距离分析与记录
+                if "FUNC-ARGS-REG" in all_valid_exp[zone_tag]:
+                    dis = len(self.format_ir)
+                    temp_call_ind = -1
+                    for ir_ind in call_func_addr:
+                        if 0 < (new_id := (ir_ind - start_addr)) < dis:
+                            dis = new_id
+                            temp_call_ind = ir_ind
+                    if temp_call_ind >= 0:
+                        if self.sub_func_args_send_reg.get(cvar) is None:
+                            self.sub_func_args_send_reg[cvar] = set()
+                        # print(f"{start_addr} | SEND-DATA: {self.format_ir[start_addr]}")
+                        # print(f"{temp_call_ind} | CALL/RET: {self.format_ir[temp_call_ind]}")
+                        self.sub_func_args_send_reg[cvar].add((start_addr, temp_call_ind))
+
         return all_valid_exp
     
     # FIXME: 分析当前P-CODE IR的逻辑正确性
-    def logic_analysis(self) -> bool:
-        # 未覆盖区域
+    def logic_analysis(self, debug_mode: bool = False) -> bool:
+        res = True
+        # =============== 未覆盖区域
         if len(self.uncover_address) > 0:
             # print("UNCOVER_IR_ROW: ", self.uncover_address)
-            print('>> [CLASS PcodeIR] Logic Analysis ==> WOOPS!! EXITS UNCOVER-IR-ROW!!!')
-            return False
-        print('>> [CLASS PcodeIR] Logic Analysis ==> Congratulation!! UNCOVER_IR_ROW VALID!!!')
+            print('>> [CLASS PcodeIR] PATH Logic Analysis ==> WOOPS!! EXITS UNCOVER-IR-ROW!!!')
+            res = False
+        else:
+            print('>> [CLASS PcodeIR] PATH Logic Analysis ==> Congratulation!! UNCOVER_IR_ROW VALID!!!')
         
-        # 变量声明，未使用
+        if not debug_mode and not res:
+            return res
+        
+        # =============== 变量声明，未使用
         vlz = self.__variables_life_zone_analysis()
         for zv_tag, all_zones_stat in vlz.items():
-            for stat in all_zones_stat:
-                if len(stat) == 0:
-                    print('>> [CLASS PcodeIR] Logic Analysis ==> UNUSED-DECLARED-VAR:', zv_tag)
-                    return False
-        print('>> [CLASS PcodeIR] Logic Analysis ==> Congratulation!! UNUSED-DECLARED-VAR VALID!!!')
-
-        # 变量未声明，但被使用
-        self.__undeclared_variables_analysis()
-        # print('>> [CLASS PcodeIR] Logic Analysis ==> UNKNOWN-FUNC-ARGS:', self.func_args_reg, ' ? ' ,self.sub_func_args_recv_reg)
-          
-        print(f'>> [CLASS PcodeIR] Logic Analysis ==> Congratulation!! GET-KNOW-FUNC-ARGS={self.func_args_reg} | SUB-FUNC-SEND={self.sub_func_args_send_reg} | SUB-FUNC-RECV={self.sub_func_args_recv_reg}!!!')
+            if len(all_zones_stat) == 0:
+                print('>> [CLASS PcodeIR] Var-Use Logic Analysis ==> WOOPS!! UNUSED-DECLARED-VAR:', zv_tag)
+                res = False  
+                    
+        if res:
+            print('>> [CLASS PcodeIR] Var-Use Logic Analysis ==> Congratulation!! UNUSED-DECLARED-VAR VALID!!!')
         
-        return True
+        if not debug_mode and not res:
+            return res
+
+        # =============== 变量未声明，但被使用
+        error_reg = self.__undeclared_variables_analysis()
+        if len(error_reg) > 0:
+            print(">> [CLASS PcodeIR] UND-Var Logic Analysis ==> WOOPS!! GET-KNOW-ERROR-REG:", error_reg)
+            res = False
+        else:
+            print(f'>> [CLASS PcodeIR] UND-Var Logic Analysis ==> Congratulation!! UNDEClARED-VAR VALID!!!')
+        
+        return res
 
     # 等式表达式拆解与记录
     def equal_exp_analysis(self, cvar: str, cexp: str, extend: bool, ir_ind: int = 0):
@@ -510,6 +628,7 @@ class PcodeIR:
         if type(all_vars) == type(""):
             all_vars = (all_vars,)
         for i, expand_cond_var in enumerate(all_vars):
+            expand_cond_var = re.sub(r"^ *\[(.*?)\] *$", r"\1", expand_cond_var)  # 清洗取值符[]
             expand_cond_var = expand_cond_var.strip()
             if not expand_cond_var.startswith("0x"):  # 常量，0x??不管
                 exp_var.add(expand_cond_var)
@@ -555,7 +674,7 @@ class PcodeIR:
 if __name__ == "__main__":
     def ir_analysis(ir: str, args_reg: list):
         my_pcode = PcodeIR(ir, args_reg[0], args_reg[1])
-        print('==>==> P-Code IR Analysis> <==<==')
+        print('==>==> P-Code IR Analysis <==<==')
         # print(ir)
         for addr, data in my_pcode.format_ir:
             cvar, cexp, inner_var = data
@@ -563,7 +682,7 @@ if __name__ == "__main__":
             expression += f"{cvar} = {cexp}" if cexp != "" else cvar
             expression += f" | {inner_var}"
             print(expression)
-        print(my_pcode.logic_analysis())
+        print(my_pcode.logic_analysis(debug_mode=True))
 
 
     def arch_pcode_main(arch_info: str, bytes_info: list):
@@ -1161,6 +1280,7 @@ return pc''',
         ],
         "MIPS:BE:32:default": [
             [
+                "3c 1c 00 46 27 bd ff d8 27 9c 9c 80 af bf 00 24 af b1 00 20 af b0 00 1c af bc 00 10 8f 99 81 fc 00 80 88 21 24 05 00 02 24 04 00 02 03 20 f8 09 00 00 30 21 8f bc 00 10 00 40 20 21 02 20 28 21 8f 99 86 d0 24 06 00 10 03 20 f8 09 00 40 80 21 8f bc 00 10 04 41 00 0c 02 00 10 21 8f 99 82 bc 8e 24 00 04 03 20 f8 09 00 00 00 00 8f bc 00 10 3c 04 00 44 24 84 01 40 8f 99 84 9c 00 00 00 00 03 20 f8 09 00 40 28 21 8f bf 00 24 8f b1 00 20 8f b0 00 1c 03 e0 00 08 27 bd 00 28",
                 "27 bd ff d8 af bf 00 24 af b1 00 20 af b0 00 1c af bc 00 10 3c 11 00 45 10 00 00 04 3c 10 00 45 0c 10 99 cf 00 00 00 00 8f bc 00 10 8e 22 6c e8 8e 03 6c ec 00 00 00 00 00 43 10 2a 14 40 ff f8 00 00 20 21 8f bf 00 24 8f b1 00 20 8f b0 00 1c 03 e0 00 08",
                 "3c 1c 00 46 27 bd ff e0 27 9c 9c 80 af bf 00 1c af b0 00 18 af bc 00 10 3c 02 00 45 8c 43 6c f0 3c 02 00 45 8c 42 6c e8 00 80 80 21 00 62 18 21 90 64 00 00 00 00 00 00 14 80 00 02 00 00 00 00 24 04 00 20 8f 82 82 80 00 00 00 00 8c 45 00 00 00 00 00 00 8c a2 00 48 00 00 00 00 10 40 00 0d 00 00 00 00 8c a3 00 10 8c a2 00 1c 00 00 00 00 00 62 10 2b 10 40 00 04 24 62 00 01 a0 64 00 00 10 00 00 09 ac a2 00 10 8f 99 84 b0 10 00 00 03 00 00 00 00 8f 99 83 94 00 00 00 00 03 20 f8 09 00 00 00 00 8f bc 00 10 3c 04 00 45 8c 82 6c dc 3c 03 00 45 8c 63 19 90 24 42 00 01 ac 82 6c dc 00 43 10 2a 14 40 00 3b 3c 03 00 45 8c 62 6c e0 ac 80 6c dc 24 42 00 01 16 00 00 02 ac 62 6c e0 24 10 00 20 8f 82 82 80 00 00 00 00 8c 45 00 00 00 00 00 00 8c a2 00 48 00 00 00 00 10 40 00 0d 00 00 00 00 8c a3 00 10 8c a2 00 1c 00 00 00 00 00 62 10 2b 10 40 00 04 24 62 00 01 a0 70 00 00 10 00 00 0a ac a2 00 10 8f 99 84 b0 10 00 00 03 00 00 00 00 8f 99 83 94 00 00 00 00 03 20 f8 09 02 00 20 21 8f bc 00 10 00 00 00 00 8f 82 82 80 00 00 00 00 8c 45 00 00 00 00 00 00 8c a2 00 48 00 00 00 00 10 40 00 0e 00 00 00 00 8c a4 00 10 8c a2 00 1c 00 00 00 00 00 82 10 2b 10 40 00 05 24 83 00 01 24 02 00 08 a0 82 00 00 10 00 00 09 ac a3 00 10 8f 99 84 b0 10 00 00 03 00 00 00 00 8f 99 83 94 00 00 00 00 03 20 f8 09 24 04 00 08 8f bc 00 10 3c 03 00 45 8c 62 6c e8 8f bf 00 1c 8f b0 00 18 24 42 00 01 ac 62 6c e8 03 e0 00 08",
                 "3c 1c 00 46 27 bd ff b8 27 9c 9c 80 af bf 00 44 af b5 00 40 af b4 00 3c af b3 00 38 af b2 00 34 af b1 00 30 af b0 00 2c af bc 00 18 8f 99 85 f4 24 02 00 4f af a2 00 20 00 00 20 21 27 a5 00 20 03 20 f8 09 00 00 30 21 8f bc 00 18 8f a2 00 20 3c 04 00 44 8f 99 80 c0 24 42 ff ff af a2 00 20 03 20 f8 09 24 84 df a0 3c 02 00 44 24 55 df d8 3c 02 00 44 24 54 df c4 3c 02 00 44 8f bc 00 18 10 00 00 45 24 53 df ec 8e 22 00 14 8e 32 00 28 8e 25 00 00 26 26 00 04 8f 99 80 e4 14 40 00 05 26 27 00 0d 03 20 f8 09 02 80 20 21 10 00 00 06 00 40 18 21 af a7 00 10 02 a0 20 21 03 20 f8 09 00 40 38 21 00 40 18 21 8f a2 00 20 8f bc 00 18 12 40 00 17 00 43 80 23 82 42 00 00 00 00 00 00 10 40 00 14 2a 02 00 02 8f 99 87 5c 00 00 00 00 03 20 f8 09 02 40 20 21 00 10 18 27 00 03 1f c3 02 03 18 24 00 62 10 2b 8f bc 00 18 10 40 00 02 02 43 10 21 a0 40 00 00 8f 99 80 c0 00 00 00 00 03 20 f8 09 02 40 20 21 10 00 00 13 00 00 00 00 2a 02 00 02 10 40 00 02 26 32 00 2c 24 10 00 02 8f 99 87 5c 00 00 00 00 03 20 f8 09 02 40 20 21 26 03 ff fe 00 62 10 2b 8f bc 00 18 10 40 00 02 02 30 10 21 a0 40 00 2a 8f 99 80 e4 02 40 28 21 03 20 f8 09 02 60 20 21 8f bc 00 18 8e 24 00 28 8f 99 81 30 00 00 00 00 03 20 f8 09 00 00 00 00 8f bc 00 18 00 00 00 00 8f 99 85 84 00 00 00 00 03 20 f8 09 24 04 00 01 8f bc 00 18 14 40 ff b6 00 40 88 21 8f bf 00 44 8f b5 00 40 8f b4 00 3c 8f b3 00 38 8f b2 00 34 8f b1 00 30 8f b0 00 2c 03 e0 00 08",
@@ -1170,7 +1290,7 @@ return pc''',
         ],
         "ARM:LE:32:Cortex":[
             [
-                "b0 b5 8a b0 00 af 00 f0 59 fa 00 f0 99 f8 00 20 00 f0 9a f9 01 20 00 f0 97 f9 12 4b 07 f1 14 04 1d 46 0f cd 0f c4 2b 68 23 60 0f 4b 3c 46 1d 46 0f cd 0f c4 2b 68 23 60 07 f1 14 03 00 21 18 46 01 f0 d1 fc 03 46 09 4a 13 60 3b 46 00 21 18 46 01 f0 c9 fc 03 46 06 4a 13 60 01 f0 ad fc 00 bf fd e7",
+                "80 b5 88 b0 00 af f8 60 b9 60 7a 60 3b 60 3b 6b 18 6b 7b 68 9b 00 1a 46 a5 21 01 f0 60 fa 3b 6b 1a 6b 7b 68 03 f1 80 43 01 3b 9b 00 13 44 bb 61 bb 69 23 f0 07 03 bb 61 bb 69 03 f0 07 03 00 2b 0b d0 4f f0 50 03 83 f3 11 88 bf f3 6f 8f bf f3 4f 8f 7b 61 00 bf 00 bf fd e7 bb 68 00 2b 1f d0 00 23 fb 61 12 e0 ba 68 fb 69 13 44 19 78 3a 6b fb 69 13 44 34 33 0a 46 1a 70 ba 68 fb 69 13 44 1b 78 00 2b 06 d0 fb 69 01 33 fb 61 fb 69 0f 2b e9 d9 00 e0 00 bf 3b 6b 00 22 83 f8 43 20 03 e0 3b 6b 00 22 83 f8 34 20 bb 6a 06 2b 01 d9 06 23 bb 62 3b 6b ba 6a da 62 3b 6b ba 6a da 64 3b 6b 00 22 1a 65 3b 6b 04 33 18 46 ff f7 c4 fe 3b 6b 18 33 18 46 ff f7 bf fe 3b 6b 3a 6b 1a 61 bb 6a c3 f1 07 02 3b 6b 9a 61 3b 6b 3a 6b 5a 62 3b 6b 00 22 5a 65 3b 6b 00 22 83 f8 58 20 3a 68 f9 68 b8 69 00 f0 9c ff 02 46 3b 6b 1a 60 fb 6a 00 2b 02 d0 fb 6a 3a 6b 1a 60 00 bf 20 37 bd 46 80 bd",
                 "80 b5 00 af ff f7 e3 ff 03 46 00 2b 03 d0 00 f0 40 fd 03 46 02 e0 00 f0 2c fd 03 46 18 46 80 bd",
                 "f0 b5 87 b0 02 af 78 60 39 60 7b 68 5c 68 7b 68 1d 68 7b 68 1b 69 9e b2 7b 68 b3 f9 08 30 18 46 ff f7 ad ff 02 46 07 f1 0c 03 01 93 00 92 3b 68 32 46 29 46 20 46 00 f0 0c f9 03 46 01 2b 01 d0 00 23 00 e0 fb 68 18 46 14 37 bd 46 f0 bd",
                 "80 b5 82 b0 00 af 78 60 ff f7 7e ff 03 46 00 2b 0e d0 78 68 00 f0 64 fb 03 46 01 2b 0b d1 08 4b 4f f0 80 52 1a 60 bf f3 4f 8f bf f3 6f 8f 02 e0 78 68 00 f0 f7 fa 00 23 18 46 08 37 bd 46 80 bd",
