@@ -18,15 +18,17 @@ class PcodeIR:
     ]
     status_mark_var = ['PSW', 'NG', 'CY', 'ZR', 'OV', 'tmpNG', 'tmpCY', 'tmpZR', 'tmpNG', 'tmpOV', 'TB', 'shift_carry']
 
-    def __init__(self, ir: str, special_registers: dict, general_registers: list) -> None:
+    def __init__(self, ir: str, registers: dict, debug_mode: bool = False) -> None:
         # 清洗IR
         ir = re.sub(r'^[ \t]+|[ \t]+$', '', ir)
         ir = re.sub(r'= SUBPIECE ([\[\]:\w]+), 0x(\d+)', r"= SUBPIECE(\1,0x\2)", ir)
         # 变量分析
         self.ir = ir
-        self.spec_reg = special_registers
-        self.gen_reg = tuple(set(general_registers))
-        self.registers = set(general_registers).union(self.get_special_registers())
+        self.spec_reg = registers['special']
+        self.gen_reg = tuple(set(registers['general']))
+        self.arg_passing_reg = set(registers['calling-convention']['argument-passing'])
+        self.ret_value_reg = set(registers['calling-convention']['return-values'])
+        self.registers = set(registers['general']).union(self.get_special_registers())
         # 变量记录
         self.addr2ir_pos = {}
         self.format_ir = []
@@ -35,6 +37,7 @@ class PcodeIR:
         self.var_undeclare_chain = []  # 未声明变量的记录 [path1_dict, path2_dict]
         self.context_storage_reg = {}
         # 函数相关寄存器（消去一部分后剩余）
+        self.func_ret_reg = set()
         self.func_args_reg = set()
         self.sub_func_args_send_reg = {}
         self.sub_func_args_recv_reg = {}
@@ -45,6 +48,8 @@ class PcodeIR:
         self.cover_address = set()
         self.uncover_address = set()
         self.unknown_address = {'if-goto': [], 'goto': []}
+        # 其他
+        self.debug = debug_mode
         # 格式化运行
         self.expression_analysis(extend=False)
 
@@ -141,7 +146,7 @@ class PcodeIR:
                     all_status = cur_path_var_status.get(sub_var)
                     if all_status is None:
                         und_var_deliver.add(sub_var)
-                        # FIXME: 将寄存器分类 -> 子函数接收参数寄存器，主函数参数寄存器
+                        # 将寄存器分类 -> a. 子函数接收参数寄存器；b. 主函数参数寄存器
                         if sub_var in self.gen_reg:
                             if last_func_pos > -1 and 0 < (cr - last_func_pos):
                                 if self.sub_func_args_recv_reg.get(sub_var) is None:
@@ -171,7 +176,8 @@ class PcodeIR:
                     if ir_pos is None:
                         ir_pos = -1
                         self.unknown_address['goto'].append(cr)
-                        print(f'>> [CLASS PcodeIR] GotoSyntaxWarning: P-Code has "goto branch", but out of current block range - {target_addr}!!!')
+                        if self.debug:
+                            print(f'>> [CLASS PcodeIR] GotoSyntaxWarning: P-Code has "goto branch", but out of current block range - {target_addr}!!!')
                     self.addr_goto[cr] = ir_pos
                     # 直接跳转
                     # 如果跳转位置不在当前块内地址，当成函数来处理
@@ -182,21 +188,23 @@ class PcodeIR:
                     ir_pos = -1
                     target_addr = [iv for iv in p_inner_var if iv.startswith('ram')]
                     if len(target_addr) == 0:  # 转跳地址为常数（非块内），当成函数处理
-                        print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {p_var}!!!')
+                        if self.debug:
+                            print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {p_var}!!!')
                     else:
                         target_addr = re.sub(r':[0-9]+\]', ']', target_addr[0])
                         ir_pos = self.addr2ir_pos.get(target_addr)
                         if ir_pos is None:
                             ir_pos = -1
                             self.unknown_address['if-goto'].append(cr)
-                            print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {target_addr}!!!')
+                            if self.debug:
+                                print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {target_addr}!!!')
                     self.addr_if_goto[cr] = ir_pos
                     if ir_pos == -1:  # FIXME: 异常跳转，阻塞路径（即，添加异常点，使得if后路径不通）
                         self.var_undeclare_chain.append(cur_path_var_status)
                         break
                     # 执行跳转
                     self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status)
-                elif p_var.startswith('call'):
+                elif p_var.startswith('call') or p_var.startswith("return "):
                     if self.addr_call_func.get(cr) is None:
                         self.addr_call_func[cr] = exp_info
                     last_func_pos = cr
@@ -205,14 +213,17 @@ class PcodeIR:
     # 未声明变量追踪 & 跳转解析 & 生命区间重组
     def __format_unique_var_life_zone(self):
         # 跳转解析，重组运行路径
-        print('>> [CLASS PcodeIR] SIMULATE IR-RUNNING...')
+        if self.debug:
+            print('>> [CLASS PcodeIR] SIMULATE IR-RUNNING...')
         self.__run_expressions_simulation(row=0, cur_path_var_status={})
-        print(">> [CLASS PcodeIR] SIMULATE IR DONE!!!")
+        if self.debug:
+            print(">> [CLASS PcodeIR] SIMULATE IR DONE!!!")
         # 记录所有（if-then）goto的位置以及跳转位置
         it_goto_info = self.addr_if_goto
         goto_info = self.addr_goto
         # 遍历每个变量的所有生命区间
-        print('>> [CLASS PcodeIR] REMAKE ZONES...')
+        if self.debug:
+            print('>> [CLASS PcodeIR] REMAKE ZONES...')
         sorted_goto = list(goto_info.keys())
         sorted_goto.extend(list(it_goto_info.keys()))
         sorted_goto = sorted(sorted_goto)
@@ -274,7 +285,8 @@ class PcodeIR:
                 sub_zones.append((ns, ne+1))
                 new_zones.append(sub_zones)
             self.unique_var_life_zone[cvar]['zones'] = new_zones
-        print('>> [CLASS PcodeIR] REMAKE ZONES DONE!!!')
+        if self.debug:
+            print('>> [CLASS PcodeIR] REMAKE ZONES DONE!!!')
 
     # TODO: 分析可能的参数寄存器
     def __undeclared_variables_analysis(self):    
@@ -349,8 +361,10 @@ class PcodeIR:
         # 统计未使用变量，是否存在连续的未使用变量，存储到相同地址
         for reg, pos_set in self.sub_func_args_send_reg.items():
             for pos in pos_set:
-                declare_pos, call_pos = pos
+                declare_pos, call_pos, is_used = pos
                 if call_pos == lir:
+                    if not is_used:  # ir->ret 区间内一直未使用，记录
+                        self.func_ret_reg.add(reg)
                     _, exp_info = self.format_ir[declare_pos]
                     exp = exp_info[1].strip()
                     if not exp.startswith('ram'):
@@ -374,7 +388,6 @@ class PcodeIR:
         # 压栈内容分析
         all_spec_reg = self.get_special_registers()
         record_save_reg = set()
-        record_possible_ret_arg = set()
         for ram, push_reg_zones in context_save_addr.items():
             pop_reg = context_load_addr.get(ram)
             if pop_reg is None:
@@ -407,31 +420,43 @@ class PcodeIR:
                     self.context_storage_reg[ram] = set()
                 self.context_storage_reg[ram] = proper_push_reg
                 record_save_reg = record_save_reg.union(proper_push_reg - all_spec_reg)
-                record_possible_ret_arg = pop_reg - record_save_reg
         # 记录函数相关寄存器
         self.func_args_reg = self.func_args_reg - record_save_reg
+        self.func_ret_reg = self.func_ret_reg - record_save_reg
         
         # Display
-        print("*" * 150)
-        print("√ CONTEXT-STORE-ADDR:", context_save_addr)
-        print("√ CONTEXT-LOAD-ADDR:", context_load_addr)
-        print("√ Upper Context Storage:", self.context_storage_reg)
-        print("*" * 150)
-        print("√ The Position of UNKNOWN Goto:", self.unknown_address['goto'])
-        print("√ The Position of Call / Ret:", self.addr_call_func)
-        print("√ The Possible Return-arguments:", record_possible_ret_arg)
-        print("√ The Position where Registers are Undeclared at: ", und_args_freq)
-        print("√ The Possible Function Arguments:", self.func_args_reg)
-        print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
-        print("√ The Possible Sub-Function Receive Arguments:", self.sub_func_args_recv_reg)
-        print("*" * 150)
+        if self.debug:
+            print("*" * 150)
+            print("√ CALLING CONVENTION - Argument Passing:", self.arg_passing_reg)
+            print("√ CALLING CONVENTION - Return Values:", self.ret_value_reg)
+            print("√ The Position where Registers are Undeclared at: ", und_args_freq)
+            print("-" * 100)
+            print("√ CONTEXT-STORE-ADDR:", context_save_addr)
+            print("√ CONTEXT-LOAD-ADDR:", context_load_addr)
+            print("√ Upper Context Storage:", self.context_storage_reg)
+            print("√ The Possible Function Arguments:", self.func_args_reg)
+            print("√ The Possible Return-arguments:", self.func_ret_reg)
+            print("-" * 100)
+            # print("√ The Position of UNKNOWN Goto:", self.unknown_address['goto'])
+            print("√ The Position of Call / Ret:", self.addr_call_func)
+            print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
+            print("√ The Possible Sub-Function Receive Arguments:", self.sub_func_args_recv_reg)
+            print("*" * 150)
         del context_load_addr, context_save_addr
         
-        # FIXME: 有问题的寄存器反馈
+        # 有问题的寄存器反馈
         error_reg = set()
         for r in record_save_reg:  # 压栈的寄存器未声明次数仅限一次
             if len(und_args_freq.get(r)) > 1:
                 error_reg.add(r)
+
+        # 检查调用约定中：
+        # A. 未声明变量中存在非参数传递寄存器，存在，则记录异常
+        if len(self.func_args_reg) > 0:
+            error_reg = error_reg.union(self.func_args_reg - self.arg_passing_reg)
+        # # B. 声明但未使用的变量中，在RET部分，存在非“返回值寄存器”，记录异常
+        # if len(self.func_ret_reg) > 0:
+        #     error_reg = error_reg.union(self.func_ret_reg - self.ret_value_reg)
 
         return error_reg
     
@@ -498,48 +523,54 @@ class PcodeIR:
                             dis = new_id
                             temp_call_ind = ir_ind
                     if temp_call_ind >= 0:
+                        is_used = "BE-USED" in all_valid_exp[zone_tag]
                         if self.sub_func_args_send_reg.get(cvar) is None:
                             self.sub_func_args_send_reg[cvar] = set()
                         # print(f"{start_addr} | SEND-DATA: {self.format_ir[start_addr]}")
                         # print(f"{temp_call_ind} | CALL/RET: {self.format_ir[temp_call_ind]}")
-                        self.sub_func_args_send_reg[cvar].add((start_addr, temp_call_ind))
+                        self.sub_func_args_send_reg[cvar].add((start_addr, temp_call_ind, is_used))
 
         return all_valid_exp
     
     # FIXME: 分析当前P-CODE IR的逻辑正确性
-    def logic_analysis(self, debug_mode: bool = False) -> bool:
+    def logic_analysis(self) -> bool:
         res = True
         # =============== 未覆盖区域
+        # print(self.ir)
         if len(self.uncover_address) > 0:
-            # print("UNCOVER_IR_ROW: ", self.uncover_address)
-            print('>> [CLASS PcodeIR] PATH Logic Analysis ==> WOOPS!! EXITS UNCOVER-IR-ROW!!!')
+            if self.debug:
+                print('>> [CLASS PcodeIR] PATH Logic Analysis ==> WOOPS!! EXITS UNCOVER-IR-ROW:', self.uncover_address)
             res = False
         else:
-            print('>> [CLASS PcodeIR] PATH Logic Analysis ==> Congratulation!! UNCOVER_IR_ROW VALID!!!')
+            if self.debug:
+                print('>> [CLASS PcodeIR] PATH Logic Analysis ==> Congratulation!! UNCOVER_IR_ROW VALID!!!')
         
-        if not debug_mode and not res:
+        if not self.debug and not res:
             return res
         
         # =============== 变量声明，未使用
         vlz = self.__variables_life_zone_analysis()
         for zv_tag, all_zones_stat in vlz.items():
             if len(all_zones_stat) == 0:
-                print('>> [CLASS PcodeIR] Var-Use Logic Analysis ==> WOOPS!! UNUSED-DECLARED-VAR:', zv_tag)
+                if self.debug:
+                    print('>> [CLASS PcodeIR] Var-Use Logic Analysis ==> WOOPS!! UNUSED-DECLARED-VAR:', zv_tag)
                 res = False  
                     
-        if res:
+        if res and self.debug:
             print('>> [CLASS PcodeIR] Var-Use Logic Analysis ==> Congratulation!! UNUSED-DECLARED-VAR VALID!!!')
         
-        if not debug_mode and not res:
+        if not self.debug and not res:
             return res
 
-        # =============== 变量未声明，但被使用
-        error_reg = self.__undeclared_variables_analysis()
-        if len(error_reg) > 0:
-            print(">> [CLASS PcodeIR] UND-Var Logic Analysis ==> WOOPS!! GET-KNOW-ERROR-REG:", error_reg)
-            res = False
-        else:
-            print(f'>> [CLASS PcodeIR] UND-Var Logic Analysis ==> Congratulation!! UNDEClARED-VAR VALID!!!')
+        # # =============== 变量未声明，但被使用
+        # error_reg = self.__undeclared_variables_analysis()
+        # if len(error_reg) > 0:
+        #     if self.debug:
+        #         print(">> [CLASS PcodeIR] UND-Var Logic Analysis ==> WOOPS!! GET-KNOW-ERROR-REG:", error_reg)
+        #     res = False
+        # else:
+        #     if self.debug:
+        #         print(f'>> [CLASS PcodeIR] UND-Var Logic Analysis ==> Congratulation!! UNDEClARED-VAR VALID!!!')
         
         return res
 
@@ -647,7 +678,8 @@ class PcodeIR:
         format_ir_row = 0
         cur_ram_id = ""
         # 表达式解析与记录
-        print('>> [CLASS PcodeIR] get "format_ir"...')
+        if self.debug:
+            print('>> [CLASS PcodeIR] get "format_ir"...')
         for exp in self.ir.split('\n'):
             if exp.startswith('IMARK'):
                 cur_ram_id = exp[5:].strip()
@@ -667,13 +699,14 @@ class PcodeIR:
             format_ir_row += 1
         
         # 格式化以及深度分析
-        print('>> [CLASS PcodeIR] deep analyzing...')
+        if self.debug:
+            print('>> [CLASS PcodeIR] deep analyzing...')
         self.__format_unique_var_life_zone()
 
 
 if __name__ == "__main__":
-    def ir_analysis(ir: str, args_reg: list):
-        my_pcode = PcodeIR(ir, args_reg[0], args_reg[1])
+    def ir_analysis(ir: str, args_reg: dict):
+        my_pcode = PcodeIR(ir, args_reg, True)
         print('==>==> P-Code IR Analysis <==<==')
         # print(ir)
         for addr, data in my_pcode.format_ir:
@@ -682,7 +715,7 @@ if __name__ == "__main__":
             expression += f"{cvar} = {cexp}" if cexp != "" else cvar
             expression += f" | {inner_var}"
             print(expression)
-        print(my_pcode.logic_analysis(debug_mode=True))
+        print(my_pcode.logic_analysis())
 
 
     def arch_pcode_main(arch_info: str, bytes_info: list):
@@ -701,572 +734,8 @@ if __name__ == "__main__":
             disasm = ctx.disassemble(cb)
             print(disasm)
             pcode = ctx.translate(cb)
-            ir_analysis(str(pcode), [bytes_info[1], bytes_info[2]])
+            ir_analysis(str(pcode), bytes_info[1])
 
-
-    wrong_irs = [
-'''IMARK ram[81f2a00:2]
-mult_addr = sp
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = lr
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r4
-sp = mult_addr
-IMARK ram[81f2a02:2]
-tmpCY = 0x20 <= r4
-tmpOV = sborrow(r4, 0x20)
-unique[97e80:4] = r4 - 0x20
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[81f2a04:2]
-unique[85680:1] = NG == OV
-if (unique[85680:1]) goto ram[81f2b06:4]
-IMARK ram[81f2a06:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[81f29ee:4]
-IMARK ram[81f2a08:2]
-mult_addr = sp
-r4 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-sp = mult_addr
-IMARK ram[81f2a0a:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[81f2a0c:4]
-IMARK ram[81f2a0c:2]
-mult_addr = sp
-r4 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-pc = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-sp = mult_addr
-unique[0:4] = pc & 0x1
-ISAModeSwitch = unique[0:4] != 0x0
-TB = ISAModeSwitch
-pc = pc & 0xfffffffe
-return pc''',
-'''IMARK ram[18063c1e:2]
-mult_addr = sp
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = lr
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r7
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r6
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r5
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r4
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r3
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r2
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r1
-mult_addr = mult_addr - 0x4
-*[ram]mult_addr = r0
-sp = mult_addr
-IMARK ram[18063c20:2]
-r5 = 0xb7
-tmpNG = r5 s< 0x0
-tmpZR = r5 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c22:2]
-unique[9df00:4] = 0x17
-unique[9d980:4] = unique[9df00:4] - 0x1
-unique[9da00:4] = r2 >> unique[9d980:4]
-unique[9db00:4] = unique[9da00:4] & 0x1
-unique[9db80:1] = unique[9df00:4] == 0x0
-unique[9dc00:1] = unique[9db80:1] && CY
-unique[9dc80:1] = unique[9df00:4] != 0x0
-unique[9dd00:1] = unique[9db00:4] != 0x0
-unique[9dd80:1] = unique[9dc80:1] && unique[9dd00:1]
-tmpCY = unique[9dc00:1] || unique[9dd80:1]
-r0 = r2 >> 0x17
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c24:2]
-r3 = r10
-IMARK ram[18063c26:2]
-tmpCY = 0xf <= r0
-tmpOV = sborrow(r0, 0xf)
-unique[97e80:4] = r0 - 0xf
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c28:2]
-unique[93c80:4] = sp + 0x3c
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c2a:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c2c:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c2a:4]
-IMARK ram[18063c2e:2]
-unique[93c80:4] = sp + 0x3fc
-r2 = *[ram]unique[93c80:4]
-IMARK ram[18063c30:2]
-tmpCY = 0x77 <= r0
-tmpOV = sborrow(r0, 0x77)
-unique[97e80:4] = r0 - 0x77
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c32:2]
-tmpCY = carry(r0, 0x4)
-tmpOV = scarry(r0, 0x4)
-r0 = r0 + 0x4
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c34:2]
-unique[85080:1] = NG == 0x0
-if (unique[85080:1]) goto ram[18063c38:4]
-IMARK ram[18063c36:2]
-unique[93c80:4] = sp + 0xf0
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c38:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c3a:2]
-unique[93900:4] = r7 + 0x16
-unique[c4180:2] = SUBPIECE r5, 0x0
-*[ram]unique[93900:4] = unique[c4180:2]
-IMARK ram[18063c3c:2]
-unique[93900:4] = r1 + 0x10
-unique[c4180:2] = SUBPIECE r7, 0x0
-*[ram]unique[93900:4] = unique[c4180:2]
-IMARK ram[18063c3e:2]
-unique[93c80:4] = sp + 0x8
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c40:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c42:2]
-unique[93900:4] = r5 + 0x10
-unique[c4180:2] = SUBPIECE r5, 0x0
-*[ram]unique[93900:4] = unique[c4180:2]
-IMARK ram[18063c44:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c4a:4]
-IMARK ram[18063c46:2]
-tmpCY = 0xff <= r0
-tmpOV = sborrow(r0, 0xff)
-unique[97e80:4] = r0 - 0xff
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c48:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063cac:4]
-IMARK ram[18063c4a:2]
-tmpCY = r0 <= r4
-tmpOV = sborrow(r4, r0)
-r2 = r4 - r0
-tmpNG = r2 s< 0x0
-tmpZR = r2 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c4c:2]
-unique[93900:4] = r0 + 0xa
-unique[98d00:2] = *[ram]unique[93900:4]
-r4 = zext(unique[98d00:2])
-IMARK ram[18063c4e:2]
-tmpCY = carry(r7, 0x3)
-tmpOV = scarry(r7, 0x3)
-r7 = r7 + 0x3
-tmpNG = r7 s< 0x0
-tmpZR = r7 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c50:2]
-unique[93900:4] = r1 + 0x10
-unique[c4180:2] = SUBPIECE r0, 0x0
-*[ram]unique[93900:4] = unique[c4180:2]
-IMARK ram[18063c52:2]
-unique[93900:4] = r1 + 0x18
-unique[98d00:2] = *[ram]unique[93900:4]
-r7 = zext(unique[98d00:2])
-IMARK ram[18063c54:2]
-r1 = r2
-tmpNG = r1 s< 0x0
-tmpZR = r1 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c56:2]
-tmpCY = carry(r7, 0x0)
-tmpOV = scarry(r7, 0x0)
-r7 = r7 + 0x0
-tmpNG = r7 s< 0x0
-tmpZR = r7 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c58:2]
-unique[93900:4] = r3 + 0x0
-unique[98d00:2] = *[ram]unique[93900:4]
-r7 = zext(unique[98d00:2])
-IMARK ram[18063c5a:2]
-unique[9d280:4] = 0xb - 0x1
-unique[9d300:4] = r6 << unique[9d280:4]
-unique[9d400:4] = unique[9d300:4] & 0x80000000
-unique[9d480:1] = 0xb == 0x0
-unique[9d500:1] = unique[9d480:1] && CY
-unique[9d580:1] = 0xb != 0x0
-unique[9d600:1] = unique[9d400:4] != 0x0
-unique[9d680:1] = unique[9d580:1] && unique[9d600:1]
-tmpCY = unique[9d500:1] || unique[9d680:1]
-r0 = r6 << 0xb
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c5c:2]
-unique[95480:1] = 0x20 - 0x1
-unique[95500:4] = r0 s>> unique[95480:1]
-unique[95600:4] = unique[95500:4] & 0x1
-unique[95680:1] = 0x20 == 0x0
-unique[95700:1] = unique[95680:1] && CY
-unique[95780:1] = 0x20 != 0x0
-unique[95800:1] = unique[95600:4] != 0x0
-unique[95880:1] = unique[95780:1] && unique[95800:1]
-tmpCY = unique[95700:1] || unique[95880:1]
-r1 = r0 s>> 0x20
-tmpNG = r1 s< 0x0
-tmpZR = r1 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c5e:2]
-tmpCY = carry(r7, 0x2f)
-tmpOV = scarry(r7, 0x2f)
-r7 = r7 + 0x2f
-tmpNG = r7 s< 0x0
-tmpZR = r7 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c60:2]
-unique[93800:4] = r0 + 0x0
-r0 = *[ram]unique[93800:4]
-IMARK ram[18063c62:2]
-unique[88480:4] = sp + 0x3c0
-r0 = unique[88480:4]
-IMARK ram[18063c64:2]
-unique[86c80:1] = ZR != 0x0
-IMARK ram[18063c66:4]
-unique[86500:1] = !CY
-unique[86600:1] = unique[86500:1] || ZR
-if (unique[86600:1]) goto ram[17f93268:4]
-IMARK ram[18063c6a:2]
-unique[93c80:4] = sp + 0x7c
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c6c:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c6e:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c6c:4]
-IMARK ram[18063c70:2]
-unique[9d280:4] = 0x13 - 0x1
-unique[9d300:4] = r7 << unique[9d280:4]
-unique[9d400:4] = unique[9d300:4] & 0x80000000
-unique[9d480:1] = 0x13 == 0x0
-unique[9d500:1] = unique[9d480:1] && CY
-unique[9d580:1] = 0x13 != 0x0
-unique[9d600:1] = unique[9d400:4] != 0x0
-unique[9d680:1] = unique[9d580:1] && unique[9d600:1]
-tmpCY = unique[9d500:1] || unique[9d680:1]
-r7 = r7 << 0x13
-tmpNG = r7 s< 0x0
-tmpZR = r7 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c72:2]
-tmpCY = 0x40 <= r0
-tmpOV = sborrow(r0, 0x40)
-unique[97e80:4] = r0 - 0x40
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c74:2]
-tmpCY = 0x0 <= r3
-tmpOV = sborrow(r3, 0x0)
-r3 = r3 - 0x0
-tmpNG = r3 s< 0x0
-tmpZR = r3 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c76:2]
-unique[9df00:4] = 0x1f
-unique[9d980:4] = unique[9df00:4] - 0x1
-unique[9da00:4] = r6 >> unique[9d980:4]
-unique[9db00:4] = unique[9da00:4] & 0x1
-unique[9db80:1] = unique[9df00:4] == 0x0
-unique[9dc00:1] = unique[9db80:1] && CY
-unique[9dc80:1] = unique[9df00:4] != 0x0
-unique[9dd00:1] = unique[9db00:4] != 0x0
-unique[9dd80:1] = unique[9dc80:1] && unique[9dd00:1]
-tmpCY = unique[9dc00:1] || unique[9dd80:1]
-r0 = r6 >> 0x1f
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c78:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c7c:4]
-IMARK ram[18063c7a:2]
-unique[9df00:4] = 0x10
-unique[9d980:4] = unique[9df00:4] - 0x1
-unique[9da00:4] = r5 >> unique[9d980:4]
-unique[9db00:4] = unique[9da00:4] & 0x1
-unique[9db80:1] = unique[9df00:4] == 0x0
-unique[9dc00:1] = unique[9db80:1] && CY
-unique[9dc80:1] = unique[9df00:4] != 0x0
-unique[9dd00:1] = unique[9db00:4] != 0x0
-unique[9dd80:1] = unique[9dc80:1] && unique[9dd00:1]
-tmpCY = unique[9dc00:1] || unique[9dd80:1]
-r7 = r5 >> 0x10
-tmpNG = r7 s< 0x0
-tmpZR = r7 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c7c:2]
-unique[88480:4] = sp + 0x0
-r0 = unique[88480:4]
-IMARK ram[18063c7e:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c86:4]
-IMARK ram[18063c80:2]
-unique[9df00:4] = 0x18
-unique[9d980:4] = unique[9df00:4] - 0x1
-unique[9da00:4] = r5 >> unique[9d980:4]
-unique[9db00:4] = unique[9da00:4] & 0x1
-unique[9db80:1] = unique[9df00:4] == 0x0
-unique[9dc00:1] = unique[9db80:1] && CY
-unique[9dc80:1] = unique[9df00:4] != 0x0
-unique[9dd00:1] = unique[9db00:4] != 0x0
-unique[9dd80:1] = unique[9dc80:1] && unique[9dd00:1]
-tmpCY = unique[9dc00:1] || unique[9dd80:1]
-r7 = r5 >> 0x18
-tmpNG = r7 s< 0x0
-tmpZR = r7 == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c82:2]
-tmpCY = 0x0 <= r0
-tmpOV = sborrow(r0, 0x0)
-unique[97e80:4] = r0 - 0x0
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c84:2]
-unique[93c80:4] = sp + 0x8
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c86:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c88:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c86:4]
-IMARK ram[18063c8a:2]
-unique[93c80:4] = sp + 0x3fc
-r4 = *[ram]unique[93c80:4]
-IMARK ram[18063c8c:2]
-unique[88480:4] = sp + 0x25c
-r0 = unique[88480:4]
-IMARK ram[18063c8e:2]
-unique[93c80:4] = sp + 0x8
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c90:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c92:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c90:4]
-IMARK ram[18063c94:2]
-unique[93c80:4] = sp + 0x3fc
-*[ram]unique[93c80:4] = r4
-IMARK ram[18063c96:2]
-tmpCY = 0x67 <= r0
-tmpOV = sborrow(r0, 0x67)
-unique[97e80:4] = r0 - 0x67
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063c98:2]
-unique[93900:4] = r1 + 0x10
-unique[c4180:2] = SUBPIECE r7, 0x0
-*[ram]unique[93900:4] = unique[c4180:2]
-IMARK ram[18063c9a:2]
-unique[93c80:4] = sp + 0x3c
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063c9c:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063c9e:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063c9c:4]
-IMARK ram[18063ca0:2]
-unique[aba80:4] = r7 & 0xff
-unique[abb00:4] = r7 >> 0x8
-unique[abc00:4] = unique[abb00:4] & 0xff
-unique[abc80:4] = unique[aba80:4] << 0x8
-unique[abd80:4] = unique[abc80:4] | unique[abc00:4]
-unique[abe00:2] = SUBPIECE unique[abd80:4], 0x0
-r7 = sext(unique[abe00:2])
-IMARK ram[18063ca2:2]
-tmpCY = 0x57 <= r0
-tmpOV = sborrow(r0, 0x57)
-unique[97e80:4] = r0 - 0x57
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063ca4:2]
-unique[93c80:4] = sp + 0x8
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063ca6:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063ca8:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063ca6:4]
-IMARK ram[18063caa:2]
-unique[97400:1] = r7 != 0x0
-if (unique[97400:1]) goto ram[18063d2c:4]
-IMARK ram[18063cac:2]
-tmpCY = 0x57 <= r0
-tmpOV = sborrow(r0, 0x57)
-unique[97e80:4] = r0 - 0x57
-tmpNG = unique[97e80:4] s< 0x0
-tmpZR = unique[97e80:4] == 0x0
-CY = tmpCY
-ZR = tmpZR
-NG = tmpNG
-OV = tmpOV
-IMARK ram[18063cae:2]
-unique[93c80:4] = sp + 0x8
-*[ram]unique[93c80:4] = r1
-IMARK ram[18063cb0:2]
-r0 = r2
-tmpNG = r0 s< 0x0
-tmpZR = r0 == 0x0
-ZR = tmpZR
-NG = tmpNG
-IMARK ram[18063cb2:2]
-unique[85480:1] = !CY
-unique[85580:1] = unique[85480:1] || ZR
-if (unique[85580:1]) goto ram[18063cb0:4]
-IMARK ram[18063cb4:2]
-mult_addr = sp
-r0 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r1 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r2 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r3 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r4 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r5 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r6 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-r7 = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-pc = *[ram]mult_addr
-mult_addr = mult_addr + 0x4
-sp = mult_addr
-unique[0:4] = pc & 0x1
-ISAModeSwitch = unique[0:4] != 0x0
-TB = ISAModeSwitch
-pc = pc & 0xfffffffe
-return pc''',
-    ]
-    
     bytes_info = {
         "tricore:LE:32:tc29x": [
             [
@@ -1275,37 +744,51 @@ return pc''',
                 "53 84 20 f0 91 00 00 f6 d9 ff 0c 00 10 ff c8 12 09 22 84 09 08 1f 53 4f 20 f0 10 2f 19 ff 00 a0 3c 01 3c 01 37 0f 68 0c 6f 70 ec 7f 37 0f 70 20 3c 01 00 90",
                 "40 4f da 01 40 f4 6d ff d6 ff 26 2f 40 f4 6d ff 28 ff f6 26 82 14 40 f4 6d ff 71 ff 26 2f 02 f2 3c 01 00 90",
             ],
-            {'a0': 'gp', 'a1': 'gp', 'a8': 'gp', 'a9': 'gp', 'a10': 'sp', 'a11': 'ra'},
-            ["a2", "a3", "a4", "a5", "a6", "a7", "a12", "a13", "a14", "a15", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15"]
+            {
+                "special": {"a0": "gp", "a1": "gp", "a8": "gp", "a9": "gp", "a10": "sp", "a11": "ra"},
+                "general": ["a2", "a3", "a4", "a5", "a6", "a7", "a12", "a13", "a14", "a15", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15"],
+                "calling-convention": {
+                    "argument-passing": ["a4", "a5", "a6", "a7", "a4", "d4", "d5", "d6", "d7"],
+                    "return-values": ["d2", "a2"]
+                }
+            }
         ],
         "MIPS:BE:32:default": [
             [
+                "27 bd ff d0 af bf 00 2c af b3 00 28 af b2 00 24 af b1 00 20 af b0 00 1c af bc 00 10 80 a3 00 0e 00 a0 88 21 10 60 00 0b 00 80 98 21 80 a2 00 0d 00 00 00 00 10 40 00 04 24 42 ff ff a0 a2 00 0d 10 00 00 23 24 10 00 8a a0 a0 00 0e 10 00 00 1d 00 60 80 21 0c 10 98 6b 00 00 00 00 00 40 80 21 24 02 00 0a 8f bc 00 10 16 02 00 16 24 02 00 01 a2 22 00 0d 10 00 00 05 24 12 00 0a 92 22 00 0d 00 00 00 00 24 42 00 01 a2 22 00 0d 0c 10 98 6b 02 60 20 21 8f bc 00 10 10 52 ff f8 00 00 00 00 14 40 00 03 a2 22 00 0e 10 00 00 09 00 00 80 21 92 22 00 0d 00 00 00 00 24 42 ff ff 10 00 00 03 a2 22 00 0d 12 00 00 02 00 00 00 00 36 10 00 80 8f bf 00 2c 02 00 10 21 8f b3 00 28 8f b2 00 24 8f b1 00 20 8f b0 00 1c 03 e0 00 08",
                 "3c 1c 00 46 27 bd ff d8 27 9c 9c 80 af bf 00 24 af b1 00 20 af b0 00 1c af bc 00 10 8f 99 81 fc 00 80 88 21 24 05 00 02 24 04 00 02 03 20 f8 09 00 00 30 21 8f bc 00 10 00 40 20 21 02 20 28 21 8f 99 86 d0 24 06 00 10 03 20 f8 09 00 40 80 21 8f bc 00 10 04 41 00 0c 02 00 10 21 8f 99 82 bc 8e 24 00 04 03 20 f8 09 00 00 00 00 8f bc 00 10 3c 04 00 44 24 84 01 40 8f 99 84 9c 00 00 00 00 03 20 f8 09 00 40 28 21 8f bf 00 24 8f b1 00 20 8f b0 00 1c 03 e0 00 08 27 bd 00 28",
                 "27 bd ff d8 af bf 00 24 af b1 00 20 af b0 00 1c af bc 00 10 3c 11 00 45 10 00 00 04 3c 10 00 45 0c 10 99 cf 00 00 00 00 8f bc 00 10 8e 22 6c e8 8e 03 6c ec 00 00 00 00 00 43 10 2a 14 40 ff f8 00 00 20 21 8f bf 00 24 8f b1 00 20 8f b0 00 1c 03 e0 00 08",
                 "3c 1c 00 46 27 bd ff e0 27 9c 9c 80 af bf 00 1c af b0 00 18 af bc 00 10 3c 02 00 45 8c 43 6c f0 3c 02 00 45 8c 42 6c e8 00 80 80 21 00 62 18 21 90 64 00 00 00 00 00 00 14 80 00 02 00 00 00 00 24 04 00 20 8f 82 82 80 00 00 00 00 8c 45 00 00 00 00 00 00 8c a2 00 48 00 00 00 00 10 40 00 0d 00 00 00 00 8c a3 00 10 8c a2 00 1c 00 00 00 00 00 62 10 2b 10 40 00 04 24 62 00 01 a0 64 00 00 10 00 00 09 ac a2 00 10 8f 99 84 b0 10 00 00 03 00 00 00 00 8f 99 83 94 00 00 00 00 03 20 f8 09 00 00 00 00 8f bc 00 10 3c 04 00 45 8c 82 6c dc 3c 03 00 45 8c 63 19 90 24 42 00 01 ac 82 6c dc 00 43 10 2a 14 40 00 3b 3c 03 00 45 8c 62 6c e0 ac 80 6c dc 24 42 00 01 16 00 00 02 ac 62 6c e0 24 10 00 20 8f 82 82 80 00 00 00 00 8c 45 00 00 00 00 00 00 8c a2 00 48 00 00 00 00 10 40 00 0d 00 00 00 00 8c a3 00 10 8c a2 00 1c 00 00 00 00 00 62 10 2b 10 40 00 04 24 62 00 01 a0 70 00 00 10 00 00 0a ac a2 00 10 8f 99 84 b0 10 00 00 03 00 00 00 00 8f 99 83 94 00 00 00 00 03 20 f8 09 02 00 20 21 8f bc 00 10 00 00 00 00 8f 82 82 80 00 00 00 00 8c 45 00 00 00 00 00 00 8c a2 00 48 00 00 00 00 10 40 00 0e 00 00 00 00 8c a4 00 10 8c a2 00 1c 00 00 00 00 00 82 10 2b 10 40 00 05 24 83 00 01 24 02 00 08 a0 82 00 00 10 00 00 09 ac a3 00 10 8f 99 84 b0 10 00 00 03 00 00 00 00 8f 99 83 94 00 00 00 00 03 20 f8 09 24 04 00 08 8f bc 00 10 3c 03 00 45 8c 62 6c e8 8f bf 00 1c 8f b0 00 18 24 42 00 01 ac 62 6c e8 03 e0 00 08",
                 "3c 1c 00 46 27 bd ff b8 27 9c 9c 80 af bf 00 44 af b5 00 40 af b4 00 3c af b3 00 38 af b2 00 34 af b1 00 30 af b0 00 2c af bc 00 18 8f 99 85 f4 24 02 00 4f af a2 00 20 00 00 20 21 27 a5 00 20 03 20 f8 09 00 00 30 21 8f bc 00 18 8f a2 00 20 3c 04 00 44 8f 99 80 c0 24 42 ff ff af a2 00 20 03 20 f8 09 24 84 df a0 3c 02 00 44 24 55 df d8 3c 02 00 44 24 54 df c4 3c 02 00 44 8f bc 00 18 10 00 00 45 24 53 df ec 8e 22 00 14 8e 32 00 28 8e 25 00 00 26 26 00 04 8f 99 80 e4 14 40 00 05 26 27 00 0d 03 20 f8 09 02 80 20 21 10 00 00 06 00 40 18 21 af a7 00 10 02 a0 20 21 03 20 f8 09 00 40 38 21 00 40 18 21 8f a2 00 20 8f bc 00 18 12 40 00 17 00 43 80 23 82 42 00 00 00 00 00 00 10 40 00 14 2a 02 00 02 8f 99 87 5c 00 00 00 00 03 20 f8 09 02 40 20 21 00 10 18 27 00 03 1f c3 02 03 18 24 00 62 10 2b 8f bc 00 18 10 40 00 02 02 43 10 21 a0 40 00 00 8f 99 80 c0 00 00 00 00 03 20 f8 09 02 40 20 21 10 00 00 13 00 00 00 00 2a 02 00 02 10 40 00 02 26 32 00 2c 24 10 00 02 8f 99 87 5c 00 00 00 00 03 20 f8 09 02 40 20 21 26 03 ff fe 00 62 10 2b 8f bc 00 18 10 40 00 02 02 30 10 21 a0 40 00 2a 8f 99 80 e4 02 40 28 21 03 20 f8 09 02 60 20 21 8f bc 00 18 8e 24 00 28 8f 99 81 30 00 00 00 00 03 20 f8 09 00 00 00 00 8f bc 00 18 00 00 00 00 8f 99 85 84 00 00 00 00 03 20 f8 09 24 04 00 01 8f bc 00 18 14 40 ff b6 00 40 88 21 8f bf 00 44 8f b5 00 40 8f b4 00 3c 8f b3 00 38 8f b2 00 34 8f b1 00 30 8f b0 00 2c 03 e0 00 08",
             ],
-            {"r0": "zero", "r1": "at",  "r26": "k0", "r27": "k1", "r28": "gp", "r29": "sp", "r30": 'fp', "r31": "ra"}, 
-            ["v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"]
+            {
+                "special": {"r0": "zero", "r1": "at",  "r26": "k0", "r27": "k1", "r28": "gp", "r29": "sp", "r30": "fp", "r31": "ra"},
+                "general": ["v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"],
+                "calling-convention": {
+                    "argument-passing": ["a0", "a1", "a2", "a3"],
+                    "return-values": ["v0", "v1"]
+                }
+            }
         ],
         "ARM:LE:32:Cortex":[
             [
-                "80 b5 88 b0 00 af f8 60 b9 60 7a 60 3b 60 3b 6b 18 6b 7b 68 9b 00 1a 46 a5 21 01 f0 60 fa 3b 6b 1a 6b 7b 68 03 f1 80 43 01 3b 9b 00 13 44 bb 61 bb 69 23 f0 07 03 bb 61 bb 69 03 f0 07 03 00 2b 0b d0 4f f0 50 03 83 f3 11 88 bf f3 6f 8f bf f3 4f 8f 7b 61 00 bf 00 bf fd e7 bb 68 00 2b 1f d0 00 23 fb 61 12 e0 ba 68 fb 69 13 44 19 78 3a 6b fb 69 13 44 34 33 0a 46 1a 70 ba 68 fb 69 13 44 1b 78 00 2b 06 d0 fb 69 01 33 fb 61 fb 69 0f 2b e9 d9 00 e0 00 bf 3b 6b 00 22 83 f8 43 20 03 e0 3b 6b 00 22 83 f8 34 20 bb 6a 06 2b 01 d9 06 23 bb 62 3b 6b ba 6a da 62 3b 6b ba 6a da 64 3b 6b 00 22 1a 65 3b 6b 04 33 18 46 ff f7 c4 fe 3b 6b 18 33 18 46 ff f7 bf fe 3b 6b 3a 6b 1a 61 bb 6a c3 f1 07 02 3b 6b 9a 61 3b 6b 3a 6b 5a 62 3b 6b 00 22 5a 65 3b 6b 00 22 83 f8 58 20 3a 68 f9 68 b8 69 00 f0 9c ff 02 46 3b 6b 1a 60 fb 6a 00 2b 02 d0 fb 6a 3a 6b 1a 60 00 bf 20 37 bd 46 80 bd",
+                "80 b5 88 b0 00 af f8 60 b9 60 7a 60 3b 60 3b 6b 18 6b 7b 68 9b 00 1a 46 a5 21 01 f0 60 fa 3b 6b 1a 6b 7b 68 03 f1 80 43 01 3b 9b 00 13 44 bb 61 bb 69 23 f0 07 03 bb 61 bb 69 03 f0 07 03 00 2b 0b d0 4f f0 50 03 83 f3 11 88 bf f3 6f 8f bf f3 4f 8f 7b 61 00 bf 00 bf fd e7 bb 68 00 2b 1f d0 00 23 fb 61 12 e0 ba 68 fb 69 13 44 19 78 3a 6b fb 69 13 44 34 33 0a 46 1a 70 ba 68 fb 69 13 44 1b 78 00 2b 06 d0 fb 69 01 33 fb 61 fb 69 0f 2b e9 d9 00 e0 00 bf 3b 6b 00 22 83 f8 43 20 03 e0 3b 6b 00 22 83 f8 34 20 bb 6a 06 2b 01 d9 06 23 bb 62 3b 6b ba 6a da 62 3b 6b ba 6a da 64 3b 6b 00 22 1a 65 3b 6b 04 33 18 46 ff f7 c4 fe 3b 6b 18 33 18 46 ff f7 bf fe 3b 6b 3a 6b 1a 61 bb 6a c3 f1 07 02 3b 6b 9a 61 3b 6b 3a 6b 5a 62 3b 6b 00 22 5a 65 3b 6b 00 22 83 f8 58 20 3a 68 f9 68 b8 69 00 f0 9c ff 02 46 3b 6b 1a 60 fb 6a 00 2b 02 d0 fb 6a 3a 6b 1a 60 00 bf 20 37 bd 46 80 bd",  # 多参数
                 "80 b5 00 af ff f7 e3 ff 03 46 00 2b 03 d0 00 f0 40 fd 03 46 02 e0 00 f0 2c fd 03 46 18 46 80 bd",
                 "f0 b5 87 b0 02 af 78 60 39 60 7b 68 5c 68 7b 68 1d 68 7b 68 1b 69 9e b2 7b 68 b3 f9 08 30 18 46 ff f7 ad ff 02 46 07 f1 0c 03 01 93 00 92 3b 68 32 46 29 46 20 46 00 f0 0c f9 03 46 01 2b 01 d0 00 23 00 e0 fb 68 18 46 14 37 bd 46 f0 bd",
                 "80 b5 82 b0 00 af 78 60 ff f7 7e ff 03 46 00 2b 0e d0 78 68 00 f0 64 fb 03 46 01 2b 0b d1 08 4b 4f f0 80 52 1a 60 bf f3 4f 8f bf f3 6f 8f 02 e0 78 68 00 f0 f7 fa 00 23 18 46 08 37 bd 46 80 bd",
             ], 
-            {"r15": "pc", "r14": "lr", "r13": "sp"}, 
-            ["r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12"]
+            {
+                "special": {"r15": "pc", "r14": "lr", "r13": "sp"},
+                "general": ["r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12"],
+                "calling-convention": {
+                    "argument-passing": ["r0", "r1", "r2", "r3"],
+                    "return-values": ["r0", "r1", "r2", "r3"]
+                }
+            }
         ]
     }
 
     for key, value in bytes_info.items():
         arch_pcode_main(key, value)
-    
-    # 记录“负样本”
-    for ir in wrong_irs:
-        print('='*50 + '[WRONG INTERMEDIATE REPRESENTATION]' + '='*50)
-        ir_analysis(ir, [{"r15": "pc", "r14": "lr", "r13": "sp"}, ["r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12"]])
 
 

@@ -94,10 +94,6 @@ class BinaryBlock:
         # IR类
         self.pcode = None
 
-    def block_boundary_recovering(self, pos_arch: str):
-        
-        pass
-
     def getInnerBlockPairs(self): 
         """
         识别所有指令对儿；
@@ -262,8 +258,8 @@ class BinaryBlock:
         存储机制已经修改，需注意
         当但当前程序可以正常线性扫描反汇编时，尝试寻找其所属的函数体的完整汇编代码；
         '''
-        print('-'*150)
-        print(">>> [CLASS BinaryBlock] IR Analysis...")
+        # print('-'*150)
+        # print(">>> [CLASS BinaryBlock] IR Analysis...")
         ghidra_config = self.reverse_engines.get('ghidra')
         # 若无架构信息
         if ghidra_config is None:
@@ -296,8 +292,8 @@ class BinaryBlock:
             try:
                 pcode_ir = ctx.translate(analyzing_bytes+delay_slot, base_address=base_addr+block_offset)
                 # print(pcode_ir)
-                pcode = PcodeIR(ir=str(pcode_ir), special_registers=self.registers['special'], general_registers=self.registers['general'])
-                if pcode.logic_analysis(debug_mode=True):
+                pcode = PcodeIR(ir=str(pcode_ir), registers=self.registers, debug_mode=False)
+                if pcode.logic_analysis():
                     res = True
                     self.pcode = pcode
                     break
@@ -316,6 +312,7 @@ class BlocksFilter:
         self.blocks = blocks
         self.have_pairs_blocks = []
         self.reversed_ht_valid_blocks = []
+        self.final_blocks = []
 
     @staticmethod
     def sub_processing(blk_tag: int, block: BinaryBlock) -> tuple[int, tuple[bool, str, dict]]:
@@ -324,11 +321,11 @@ class BlocksFilter:
         '''
         return blk_tag, block.isGhidraReversedPairsValid()
 
-    def filterBlocksByInnerPairs(self) -> list[BinaryBlock]:
+    def filterBlocksByInnerPairs(self) -> list[int]:
         self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
         return self.have_pairs_blocks
     
-    def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False, display_error: bool = False) -> list[BinaryBlock]:
+    def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False, display_error: bool = False) -> list[int]:
         # 记录反汇编验证后的架构
         def record_reversing_result(blk_tag: int, rvs_res: tuple[bool, str, dict]):
             is_reversed, engine, config_info = rvs_res
@@ -369,6 +366,16 @@ class BlocksFilter:
         
         # print(BinaryBlock.reverse_engines)
         return self.reversed_ht_valid_blocks
+
+    def filterBlocksByIRLogic(self) -> list[int]:
+        self.final_blocks = [i for i in self.reversed_ht_valid_blocks if self.blocks[i].isPCodeIRValid()]
+        
+        # TT = len(self.final_blocks)
+        # FT = len(self.reversed_ht_valid_blocks) - TT
+        # pv_rate = TT/(TT+FT)
+        # print(f'PCODE-VALID: {TT}/{(TT+FT)}={pv_rate:.2f}%')
+
+        return self.final_blocks
 
 
 class BinaryAnalyzer:
@@ -492,23 +499,16 @@ class BinaryAnalyzer:
         # 过滤
         blk_filter.filterBlocksByInnerPairs()
         blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # 开启多进程
+        blk_filter.filterBlocksByIRLogic()  # IR分析
         # 评估
         if display_block_info:
             calc_BlockRates(
                 blocks=len(blk_filter.blocks), 
                 blocks_with_pair=len(blk_filter.have_pairs_blocks), 
-                blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks)
+                blocks_valid_reverse=len(blk_filter.reversed_ht_valid_blocks),
+                blocks_valid_ir=len(blk_filter.final_blocks)
             )
-        # TODO: ======================================== <数据流分析> ========================================
-        FT, TT =0, 0
-        for blk_index in blk_filter.reversed_ht_valid_blocks:
-            if blk_filter.blocks[blk_index].isPCodeIRValid():
-                TT += 1
-            else:
-                FT += 1
-        if TT > 0 or FT > 0:
-            pv_rate = TT/(TT+FT)*100
-            print(f'PCODE-VALID: {TT}/{(TT+FT)}={pv_rate:.2f}%')
+            
         return blk_filter
 
     @ staticmethod
@@ -549,7 +549,7 @@ class BinaryAnalyzer:
         for endian in supported_endian:
             filter = self.archAnalysis(isa_arch=arch, endian=endian, ins_pair_dict=ins_pair_dict, display_block_info=self.display)
             pos_arch_blk_data, is_pos_arch = self.is_best_choice(
-                sample=(len(filter.blocks), len(filter.have_pairs_blocks), len(filter.reversed_ht_valid_blocks)), 
+                sample=(len(filter.blocks), len(filter.have_pairs_blocks), len(filter.final_blocks)), 
                 standards=pos_arch_blk_data
             )
             possible_arch = arch+':'+endian if is_pos_arch else possible_arch

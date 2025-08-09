@@ -28,12 +28,14 @@ def calc_BlockPairInstrRates(instr_pair: tuple[str], instr_details: list, bin_nu
     print("POSSIBLE CALL INS NUMBERS:", hlen)
 
 
-def calc_BlockRates(blocks: int, blocks_with_pair: int, blocks_valid_reverse: int):
-    print("Block Num | Num of Block with Inner Pairs | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result")
-    if blocks > 0 and blocks_with_pair > 0:
-        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 15} | {blocks_with_pair / blocks* 100:33.2f}% | {(blocks_valid_reverse/blocks_with_pair)*100: 62.2f}%")
-    elif blocks == 0:
-        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 15} | {0.00: 33.2f}% | {0.00: 62.2f}% ")
+def calc_BlockRates(blocks: int, blocks_with_pair: int, blocks_valid_reverse: int, blocks_valid_ir: int):
+    print("Block Num | Num of Block with Inner Pairs | Num of Block that can be reversed | Valid Block Num | Rate of Block that has Inner Pairs | Rate of Block that has Inner Pairs and has Valid Reverse Result | Rate of Block that has Valid IR")
+    if blocks == 0:
+        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 32} | {blocks_valid_ir: 15} | {0.00: 33.2f}% | {0.00: 62.2f}% | {0.00: 31.2f}")
+    elif blocks_valid_reverse > 0:
+        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 32} | {blocks_valid_ir: 15} | {blocks_with_pair / blocks* 100:33.2f}% | {(blocks_valid_reverse/blocks_with_pair)*100: 62.2f}% | {(blocks_valid_ir/blocks_valid_reverse)*100: 31.2f}%")
+    elif blocks_with_pair > 0:
+        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 32} | {blocks_valid_ir: 15} | {blocks_with_pair / blocks* 100:33.2f}% | {(blocks_valid_reverse/blocks_with_pair)*100: 62.2f}% | {0.00: 31.2f}%")
     else:
-        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 15} | {blocks_with_pair/blocks*100:33.2f}% | {0.00: 62.2f}%")
+        print(f"{blocks: 9} | {blocks_with_pair: 29} | {blocks_valid_reverse: 32} | {blocks_valid_ir: 15} | {blocks_with_pair/blocks*100:33.2f}% | {0.00: 62.2f}% | {0.00: 31.2f}%")
 

@@ -66,32 +66,68 @@ def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[s
 
 def get_histogram_data(elf_file_path: str, bin_file_path: str, endian: str):
     def shoot(blocks):
-        i, j = 0, 0
-        std_num, blk_num = len(standard_blocks), len(blocks)
-        sorted_blocks = sorted(pairs_blocks, key=lambda x: x[0])
+        sorted_blocks = sorted(blocks, key=lambda x: x[0])
         shoot_bingo = set()
-        while i < std_num and j < blk_num:
-            std_scope = (standard_blocks[i][0], standard_blocks[i][0] + standard_blocks[i][1])
-            cur_scope = (sorted_blocks[j][0], sorted_blocks[j][0] + sorted_blocks[j][1])
-            # print(std_scope, cur_scope)
-            if (std_scope[0] < cur_scope[0] < std_scope[1]) or (std_scope[0] < cur_scope[1] < std_scope[1]):
-                shoot_bingo.add(sorted_blocks[j])
-            elif std_scope[1] < cur_scope[0]:
-                i += 1
-                continue
-            j += 1
+        for blk in sorted_blocks:
+            cur_scope = (blk[0], blk[0] + blk[1])
+            for sb in standard_blocks:
+                std_scope = (sb[0], sb[0] + sb[1])
+                if (std_scope[0] > cur_scope[1]) or (std_scope[1] < cur_scope[0]):
+                    continue
+                if sb[1] > blk[1]:
+                    continue
+                
+                dis = 0
+                if cur_scope[0] < std_scope[0]:
+                    if cur_scope[1] > std_scope[1]:
+                        dis = std_scope[1] - std_scope[0]
+                    else:
+                        dis = cur_scope[1] - std_scope[0]
+                else:
+                    if cur_scope[1] > std_scope[1]:
+                        dis = std_scope[1] - cur_scope[0]
+                    else:
+                        dis = cur_scope[1] - cur_scope[0]
+                if dis < 5:
+                    continue
+                
+                # print(std_scope, cur_scope)
+                shoot_bingo.add(blk)
+                break
+
+        # i, j = 0, 0
+        # std_num, blk_num = len(standard_blocks), len(blocks)
+        # while i < std_num and j < blk_num:
+        #     std_scope = (standard_blocks[i][0], standard_blocks[i][0] + standard_blocks[i][1])
+        #     cur_scope = (sorted_blocks[j][0], sorted_blocks[j][0] + sorted_blocks[j][1])
+        #     # print(std_scope, cur_scope)
+        #     if (std_scope[0] < cur_scope[0] < std_scope[1]) or (std_scope[0] < cur_scope[1] < std_scope[1]):
+        #         shoot_bingo.add(sorted_blocks[j])
+        #     elif std_scope[1] < cur_scope[0]:
+        #         i += 1
+        #         continue
+        #     j += 1
+
         return shoot_bingo
 
-    blocks_info = get_all_blocks(elf_fpath=elf_file_path, bin_fpath=bin_file_path)
+    blocks_info = get_all_blocks(elf_fpath=elf_file_path, bin_fpath=bin_file_path, endian=endian.upper())
+    if blocks_info is None:
+        return []
     standard_blocks, pairs_blocks, inner_pairs_blocks, reversing_blocks = set(blocks_info['elf']), set(blocks_info['blocks']), set(blocks_info['blocks_with_inner_pairs']), set(blocks_info['blocks_with_reversing'])
     standard_blocks = sorted(standard_blocks, key=lambda x: x[0])
+
+    print(standard_blocks)
+    print(reversing_blocks)
+    print("STANDARD BLOCK NUM:", len(standard_blocks))
+    print("BLOCK NUM after ANALYZING:", len(pairs_blocks), '->', len(inner_pairs_blocks), '->', len(reversing_blocks))
 
     bingo_blocks = shoot(pairs_blocks)
     inner_valid = set(inner_pairs_blocks).intersection(bingo_blocks)
     reverse_valid = set(reversing_blocks).intersection(bingo_blocks)
-    # print(len(bingo_blocks), len(inner_valid), len(reverse_valid))
 
+    print(bingo_blocks, inner_valid, reverse_valid)
     print(len(bingo_blocks), len(inner_valid), len(reverse_valid))
+
     return [(len(standard_blocks), 0), 
             (len(bingo_blocks), len(pairs_blocks) - len(bingo_blocks)), 
             (len(inner_valid), len(inner_pairs_blocks) - len(inner_valid)), 
@@ -116,9 +152,18 @@ def ablation_study(samples_workspace: str, output_workspace: str):
             bin_file_path = output_workspace + arch + '/' + bin_file_name
             del bin_file_name
             tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, endian=endian_table.get(arch))
+            if len(tmp_result) == 0:
+                continue
             for i, e in enumerate(tmp_result):
                 total_result[i][0] += e[0]
                 total_result[i][1] += e[1]
+    
+    # 百分比
+    for cent in total_result:
+        TT = cent[0]
+        TF = cent[1]
+        rate = TT / (TT + TF)
+        print(f"{TT}/({TT}+{TF}) = {rate*100:.2f}%")
 
     return [tuple(ele) for ele in total_result]
 

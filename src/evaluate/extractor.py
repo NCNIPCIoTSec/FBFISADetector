@@ -67,10 +67,12 @@ def get_all_blocks(bin_fpath: str, elf_fpath: str, endian: str = 'LE'):
 
     # ================ 预处理 ================
     entry_addr, record = extract_code_block_from_elf(elf_fpath=elf_fpath)  # ELF处理
+    if len(record) == 0:
+        return None
     storage_path, _ = os.path.split(bin_fpath)  # 获取bin文件路径信息
     arch = storage_path.split('/')[-1].upper()  # 获取架构信息
     ## 分析器初始化
-    print(f'====> {bin_fpath} <====')
+    print(f'====> {bin_fpath}:{arch}:{endian} <====')
     analyzer = BinaryAnalyzer(bin_fpath)
     blk_filter = analyzer.archAnalysis(isa_arch=arch, endian=endian)
 
@@ -79,6 +81,15 @@ def get_all_blocks(bin_fpath: str, elf_fpath: str, endian: str = 'LE'):
     # 获取bin分析器所得的所有的blocks
     all_blocks = [get_block_pos(blk) for blk in blk_filter.blocks]
     blocks_with_inner_pairs = [get_block_pos(blk) for blk in [blk_filter.blocks[ind] for ind in blk_filter.have_pairs_blocks]]
-    blocks_with_reversing = [get_block_pos(blk) for blk in [blk_filter.blocks[ind] for ind in blk_filter.reversed_ht_valid_blocks]]
+    blocks_with_reversing = [get_block_pos(blk) for blk in [blk_filter.blocks[ind] for ind in blk_filter.final_blocks]]
+    print("Filter Res:", len(all_blocks), len(blocks_with_inner_pairs), len(blocks_with_reversing))
 
     return {"others": {"entry_address": entry_addr}, "elf": elf_segments, "blocks": all_blocks, "blocks_with_inner_pairs": blocks_with_inner_pairs, "blocks_with_reversing": blocks_with_reversing}
+
+
+if __name__ == "__main__":
+    print(extract_code_block_from_elf("/home/yq/workspace/studies/MyProjects/FirmISAIdentify/relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips/0a6bed53ed216174f6ed2cd9a70f9b53"))
+
+
+
+
