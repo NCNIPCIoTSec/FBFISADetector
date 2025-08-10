@@ -81,10 +81,44 @@ def bytes2bit_string(byte_data: bytes) -> str:
 
 
 def get_register_num(byte_data: bytes, mask: bytes) -> int:
-    return int.from_bytes(bytes_and_operation(byte_data, mask)) >> bytes2bit_string(mask)[::-1].find("1")
+  """
+    根据字节掩码mask处理字节byte_data，提取mask中为1的位对应的byte_data中的位，拼接成新整数
+    
+    参数:
+        byte_data: 原始字节数据
+        mask: 字节掩码，用于指定需要保留的位
+        
+    返回:
+        拼接后的整数结果
+  """
+  if len(byte_data) != len(mask):
+      raise ValueError("字节串和掩码必须具有相同的长度")
+
+  # 存储提取的位值
+  bit_values = []
+  # 计算最大位索引（从0开始）
+  max_bit_index = 8 * len(mask) - 1
+
+  # 遍历所有可能的位索引
+  for i in range(max_bit_index + 1):
+      # 计算当前位属于哪个字节（从右向左处理字节）
+      byte_index = len(mask) - 1 - (i // 8)
+      # 计算在字节中的位位置（0-7）
+      bit_in_byte = i % 8
+      
+      # 检查掩码mask中当前位是否为1
+      if (mask[byte_index] >> bit_in_byte) & 1:
+          # 提取A中对应位的值
+          a_bit = (byte_data[byte_index] >> bit_in_byte) & 1
+          bit_values.append(str(a_bit))
+
+  # 将提取的位拼接成二进制字符串并转换为整数
+  if not bit_values:
+      return 0
+  return int(''.join(bit_values), 2)
 
 
 if __name__ == "__main__":
     print(bytes_reverse(curb=b"\x6d\x00\x53\x00", reverse_unit=4).hex())
-    print(get_register_num(b"\xD9\x44\xA4\xE2", b"\x00\x0f\x00\x00"))
+    print(get_register_num(b"\xfc\x06", b"\x10\x7d"), get_register_num(b"\x70\xa2", b"\x1f\x80"))
 

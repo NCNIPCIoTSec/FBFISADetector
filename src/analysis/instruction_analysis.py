@@ -34,6 +34,13 @@ GHIDRA_PROCESSOR_ARCHITECTURES = {
         "VARIANTS": [
             "default", "R6", "micro"
         ]
+    },
+    "RISCV": {
+        "GHIDRA_ARCH_NAME": "RISCV",
+        "SPACE_SIZE": 64,
+        "VARIANTS": [
+            "RV64GC"
+        ]
     }
 }
 
@@ -292,7 +299,7 @@ class BinaryBlock:
             try:
                 pcode_ir = ctx.translate(analyzing_bytes+delay_slot, base_address=base_addr+block_offset)
                 # print(pcode_ir)
-                pcode = PcodeIR(ir=str(pcode_ir), registers=self.registers, debug_mode=False)
+                pcode = PcodeIR(ir=str(pcode_ir), registers=self.registers, debug_mode=True)
                 if pcode.logic_analysis():
                     res = True
                     self.pcode = pcode

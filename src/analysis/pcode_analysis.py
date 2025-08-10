@@ -1,3 +1,4 @@
+from calendar import c
 from itertools import count
 import re
 import sys
@@ -115,12 +116,11 @@ class PcodeIR:
         return "", whole_exp
 
     # 递归形式仿真运行p-code代码，追踪未声明变量并记录（if-goto/goto ram[imm]）相关位置
-    def __run_expressions_simulation(self, row: int, cur_path_var_status: dict):
+    def __run_expressions_simulation(self, row: int, cur_path_var_status: dict, last_func_pos = -1):
         # 边界条件1: row最大到最低端算式
         # 边界条件2: 一条路径中，每个节点只允许走过一次（防止while-loop导致死循环）
         # print(f"{row} / {cur_path_var_status}}")
         # 限制成局部变量
-        last_func_pos = -1
         cur_path_var_status = cur_path_var_status.copy()
         for cr in range(row, len(self.format_ir)):
             # 如果处理过，不做处理
@@ -148,7 +148,7 @@ class PcodeIR:
                         und_var_deliver.add(sub_var)
                         # 将寄存器分类 -> a. 子函数接收参数寄存器；b. 主函数参数寄存器
                         if sub_var in self.gen_reg:
-                            if last_func_pos > -1 and 0 < (cr - last_func_pos):
+                            if (last_func_pos > -1) and (sub_var in self.ret_value_reg):
                                 if self.sub_func_args_recv_reg.get(sub_var) is None:
                                     self.sub_func_args_recv_reg[sub_var] = set()
                                 self.sub_func_args_recv_reg[sub_var].add((cr, last_func_pos))
@@ -182,15 +182,15 @@ class PcodeIR:
                     # 直接跳转
                     # 如果跳转位置不在当前块内地址，当成函数来处理
                     if ir_pos != -1:
-                        return self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status)
+                        return self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status, last_func_pos=last_func_pos)
                 elif p_var.startswith('if '):  # IF-THEN
                     # 计算跳转位置
                     ir_pos = -1
                     target_addr = [iv for iv in p_inner_var if iv.startswith('ram')]
-                    if len(target_addr) == 0:  # 转跳地址为常数（非块内），当成函数处理
+                    if len(target_addr) == 0:  # 转跳地址为常数/变量（非块内） —— 异常
                         if self.debug:
                             print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {p_var}!!!')
-                    else:
+                    else: 
                         target_addr = re.sub(r':[0-9]+\]', ']', target_addr[0])
                         ir_pos = self.addr2ir_pos.get(target_addr)
                         if ir_pos is None:
@@ -199,15 +199,18 @@ class PcodeIR:
                             if self.debug:
                                 print(f'>> [CLASS PcodeIR] If-ThenSyntaxWarning: P-Code has "if-then goto branch", but out of current block range - {target_addr}!!!')
                     self.addr_if_goto[cr] = ir_pos
-                    if ir_pos == -1:  # FIXME: 异常跳转，阻塞路径（即，添加异常点，使得if后路径不通）
-                        self.var_undeclare_chain.append(cur_path_var_status)
-                        break
-                    # 执行跳转
-                    self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status)
-                elif p_var.startswith('call') or p_var.startswith("return "):
+                    if ir_pos == -1:  # FIXME: 异常跳转（有可能是不完整的字节块导致的），不阻塞路径
+                        continue
+                    # 转跳
+                    self.__run_expressions_simulation(row=ir_pos, cur_path_var_status=cur_path_var_status, last_func_pos=last_func_pos)
+                elif p_var.startswith('call'):
                     if self.addr_call_func.get(cr) is None:
                         self.addr_call_func[cr] = exp_info
                     last_func_pos = cr
+                elif p_var.startswith("return "):
+                    if self.addr_call_func.get(cr) is None:
+                        self.addr_call_func[cr] = exp_info
+                    self.var_undeclare_chain.append(cur_path_var_status)
     
     # FIXME: 持续检测是否存在逻辑问题
     # 未声明变量追踪 & 跳转解析 & 生命区间重组
@@ -289,7 +292,19 @@ class PcodeIR:
             print('>> [CLASS PcodeIR] REMAKE ZONES DONE!!!')
 
     # TODO: 分析可能的参数寄存器
-    def __undeclared_variables_analysis(self):    
+    def __undeclared_variables_analysis(self):   
+        # 获取 SP/PC/LR/RA 的全部名称
+        sp_reg = set()
+        pc_reg = set()
+        for k, n in self.spec_reg.items():   
+            if n == "sp":
+                sp_reg.add(k)
+                sp_reg.add(n)
+                continue
+            if n in {"pc", "ra", "lr"}:
+                pc_reg.add(k)
+                pc_reg.add(n)
+
         # 记录可能得保存上下文的地址
         def record_pos_context_addr(ram_addr: str, all_reg: set, record_addr: dict, continuous: bool = True):
             if not ram_addr.startswith('ram'):
@@ -307,30 +322,37 @@ class PcodeIR:
         # 分析未声明变量
         def undeclared_var_analysis(chain_path: dict, results: dict) -> dict:
             for cvar, chain in chain_path.items():
-                last_ir, dis, con_count, pre_reg = -1, 0, 0, set()
+                have_pc, last_continuous = False, False
+                last_ir, dis, pre_reg = -1, 0, set()
                 for ir_ind, unv_set in chain:
                     # ===================> 内存分析
                     if cvar.startswith('ram'):
                         #  ------------------ 分析是否为常量 
                         if unv_set == "const":
-                            con_count = 0
-                            if len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                            if results.get(cvar) and len(pre_reg) > 0 and pre_reg not in results[cvar]:
                                 results[cvar][-1] = results[cvar][-1].union(pre_reg)  # 记录某地址之前连续存储的寄存器
                             pre_reg.clear()  # 当中间出现常量，认为是上下文保存的地址的概率较低，清除记录
                             continue
-                        # ------------------- 分析指令间距离 / 指令间距离不再均衡，认为不连续
+                        # ------------------- PC/LR寄存器出现后：分析指令间距离 / 指令间距离不再均衡，认为不连续
                         temp_dis = dis
                         dis = ir_ind - last_ir
-                        if con_count == 0:
-                            results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
-                        elif con_count > 1 and (temp_dis != dis):
-                            if len(pre_reg) > 0 and pre_reg not in results[cvar]:
-                                results[cvar][-1] = results[cvar][-1].union(pre_reg)  
-                            pre_reg.clear()
-                            con_count = 0
-                            results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
+                        if have_pc:
+                            if last_continuous and (temp_dis != dis):  # 之前连续但现在不连续，另开一个新的连续区段
+                                if results.get(cvar) and len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                                    results[cvar][-1] = results[cvar][-1].union(pre_reg)  
+                                pre_reg.clear()
+                                results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
+                        else:
+                            if len(pc_reg.intersection(unv_set)) > 0:
+                                results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
+                                have_pc = True
+                        # 记录当前距离连续性
+                        if temp_dis == dis:
+                            last_continuous = True
+                        else:
+                            last_continuous = False
+                        # 更新未声明变量
                         pre_reg = pre_reg.union(unv_set)
-                        con_count += 1
                         last_ir = ir_ind
                     # ===================>  分析寄存器集合内的寄存器，并记录
                     for unv in unv_set:
@@ -340,7 +362,7 @@ class PcodeIR:
                                 und_args_freq[unv] = set()
                             und_args_freq[unv].add(ir_ind)
                 # 如果存放未声明变量，记录
-                if len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                if results.get(cvar) and len(pre_reg) > 0 and pre_reg not in results[cvar]:
                     results[cvar][-1] = results[cvar][-1].union(pre_reg)  
 
             return results
@@ -375,24 +397,18 @@ class PcodeIR:
 
         # print('c. analyze undeclared variables...')
         # 是否存在上下文保存区域，分析并筛选掉一部分用于上下文保存的未声明变量
-        sp_reg = set()
-        pc_reg = set()
-        for k, n in self.spec_reg.items():   # 获取 SP/PC/LR/RA 的全部名称
-            if n == "sp":
-                sp_reg.add(k)
-                sp_reg.add(n)
-                continue
-            if n in {"pc", "ra", "lr"}:
-                pc_reg.add(k)
-                pc_reg.add(n)
         # 压栈内容分析
         all_spec_reg = self.get_special_registers()
         record_save_reg = set()
         for ram, push_reg_zones in context_save_addr.items():
             pop_reg = context_load_addr.get(ram)
             if pop_reg is None:
-                continue
-            pop_reg = pop_reg[0]
+                pop_reg = set()
+                for item in context_load_addr.items(): 
+                    if len(item[1]) > 0:
+                        pop_reg = pop_reg.union(item[1][0])
+            else:
+                pop_reg = pop_reg[0]
             max_intersection, proper_push_reg = 0, set()
             for push_reg in push_reg_zones:
                 if len(push_reg) == 0:
@@ -410,10 +426,11 @@ class PcodeIR:
                 if cur_pc_reg is None or cur_sp_reg is None:
                     continue
                 # 压栈、出栈的寄存器内容不一致，pass
-                temp_intersection = len(push_reg.intersection(pop_reg))
+                temp_push_reg = push_reg.intersection(pop_reg)
+                temp_intersection = len(temp_push_reg)
                 if temp_intersection > max_intersection:
                     max_intersection = temp_intersection
-                    proper_push_reg = push_reg
+                    proper_push_reg = temp_push_reg
             # 上下文存储
             if max_intersection > 0:
                 if self.context_storage_reg.get(ram) is None:
@@ -439,7 +456,7 @@ class PcodeIR:
             print("-" * 100)
             # print("√ The Position of UNKNOWN Goto:", self.unknown_address['goto'])
             print("√ The Position of Call / Ret:", self.addr_call_func)
-            print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
+            # print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
             print("√ The Possible Sub-Function Receive Arguments:", self.sub_func_args_recv_reg)
             print("*" * 150)
         del context_load_addr, context_save_addr
@@ -562,15 +579,15 @@ class PcodeIR:
         if not self.debug and not res:
             return res
 
-        # # =============== 变量未声明，但被使用
-        # error_reg = self.__undeclared_variables_analysis()
-        # if len(error_reg) > 0:
-        #     if self.debug:
-        #         print(">> [CLASS PcodeIR] UND-Var Logic Analysis ==> WOOPS!! GET-KNOW-ERROR-REG:", error_reg)
-        #     res = False
-        # else:
-        #     if self.debug:
-        #         print(f'>> [CLASS PcodeIR] UND-Var Logic Analysis ==> Congratulation!! UNDEClARED-VAR VALID!!!')
+        # =============== 变量未声明，但被使用
+        error_reg = self.__undeclared_variables_analysis()
+        if len(error_reg) > 0:
+            if self.debug:
+                print(">> [CLASS PcodeIR] UND-Var Logic Analysis ==> WOOPS!! GET-KNOW-ERROR-REG:", error_reg)
+            res = False
+        else:
+            if self.debug:
+                print(f'>> [CLASS PcodeIR] UND-Var Logic Analysis ==> Congratulation!! UNDEClARED-VAR VALID!!!')
         
         return res
 
