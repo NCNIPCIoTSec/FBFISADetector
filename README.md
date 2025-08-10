@@ -92,8 +92,8 @@
   来自文章[ISADetect](https://dl.acm.org/doi/10.1145/3374664.3375742)总结的[*数据集*](https://etsin.fairdata.fi/dataset/80fa69af-addb-4f9a-b45c-c16011bae366/data)，此数据集仍是ELF文件为主，因为ELF具有详细的section信息（数据表名、代码函数名），方便实验时对代码区域的定位；  
   选择下载指令，如`wget --content-disposition "https://download.fairdata.fi:443/download?token=xxx"`，获取数据集以及机器学习模型；  
 - **测试架构**  
-  **传感器设备：** AMR-Cortex-M、8051；  
-  **汽车电子领域：** ARM-Cortex-R、PowerPC、Tricore；  
-  **网络设备：** ARM-Cortex-A、MIPS；  
-  **工业设施：** ARM-Cortex-M、x86；  
-
+  **三个主流ISA架构：** ARM、RISC-V；   
+  **汽车电子领域：** Tricore；  
+  **网络设备：** MIPS；  
+  **工业设备：** PowerPC；  
+  注意：为什么不处理x86架构？其一，因为x86架构主要应用于高性能计算，对于单机嵌入式这种需要低功耗、硬件资源受限的场景并非最佳选择。其二，对于变长的复杂指令集架构，我们在划分字节块的时候需要花费更多的心思，以避免在operand位置含有和指定opcode相似的值，从而导致字节块划分出现问题的情况。
