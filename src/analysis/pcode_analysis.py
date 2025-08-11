@@ -29,6 +29,7 @@ class PcodeIR:
         self.gen_reg = tuple(set(registers['general']))
         self.arg_passing_reg = set(registers['calling-convention']['argument-passing'])
         self.ret_value_reg = set(registers['calling-convention']['return-values'])
+        self.stack_frame_saved_reg = set(registers['calling-convention']['saved'])
         self.registers = set(registers['general']).union(self.get_special_registers())
         # 变量记录
         self.addr2ir_pos = {}
@@ -304,6 +305,7 @@ class PcodeIR:
             if n in {"pc", "ra", "lr"}:
                 pc_reg.add(k)
                 pc_reg.add(n)
+        stack_frame_reg: set = self.stack_frame_saved_reg.union(pc_reg).union(sp_reg)
 
         # 记录可能得保存上下文的地址
         def record_pos_context_addr(ram_addr: str, all_reg: set, record_addr: dict, continuous: bool = True):
@@ -322,8 +324,7 @@ class PcodeIR:
         # 分析未声明变量
         def undeclared_var_analysis(chain_path: dict, results: dict) -> dict:
             for cvar, chain in chain_path.items():
-                have_pc, last_continuous = False, False
-                last_ir, dis, pre_reg = -1, 0, set()
+                pre_reg = set()
                 for ir_ind, unv_set in chain:
                     # ===================> 内存分析
                     if cvar.startswith('ram'):
@@ -333,27 +334,16 @@ class PcodeIR:
                                 results[cvar][-1] = results[cvar][-1].union(pre_reg)  # 记录某地址之前连续存储的寄存器
                             pre_reg.clear()  # 当中间出现常量，认为是上下文保存的地址的概率较低，清除记录
                             continue
-                        # ------------------- PC/LR寄存器出现后：分析指令间距离 / 指令间距离不再均衡，认为不连续
-                        temp_dis = dis
-                        dis = ir_ind - last_ir
-                        if have_pc:
-                            if last_continuous and (temp_dis != dis):  # 之前连续但现在不连续，另开一个新的连续区段
-                                if results.get(cvar) and len(pre_reg) > 0 and pre_reg not in results[cvar]:
-                                    results[cvar][-1] = results[cvar][-1].union(pre_reg)  
-                                pre_reg.clear()
-                                results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
-                        else:
-                            if len(pc_reg.intersection(unv_set)) > 0:
-                                results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
-                                have_pc = True
-                        # 记录当前距离连续性
-                        if temp_dis == dis:
-                            last_continuous = True
-                        else:
-                            last_continuous = False
+                        # ------------------- 记录栈帧中的值
+                        if results.get(cvar) is None:
+                            results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
+                        if len(unv_set - stack_frame_reg) > 0:  # 若存储了非上下文保存寄存器，记录并另开一块新区域
+                            if len(pre_reg) > 0 and pre_reg not in results[cvar]:
+                                results[cvar][-1] = results[cvar][-1].union(pre_reg)  
+                            pre_reg.clear()
+                            results = record_pos_context_addr(ram_addr=cvar, all_reg=set(), record_addr=results, continuous=False)
                         # 更新未声明变量
                         pre_reg = pre_reg.union(unv_set)
-                        last_ir = ir_ind
                     # ===================>  分析寄存器集合内的寄存器，并记录
                     for unv in unv_set:
                         if unv in self.gen_reg:
@@ -456,7 +446,7 @@ class PcodeIR:
             print("-" * 100)
             # print("√ The Position of UNKNOWN Goto:", self.unknown_address['goto'])
             print("√ The Position of Call / Ret:", self.addr_call_func)
-            # print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
+            print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
             print("√ The Possible Sub-Function Receive Arguments:", self.sub_func_args_recv_reg)
             print("*" * 150)
         del context_load_addr, context_save_addr
@@ -471,9 +461,9 @@ class PcodeIR:
         # A. 未声明变量中存在非参数传递寄存器，存在，则记录异常
         if len(self.func_args_reg) > 0:
             error_reg = error_reg.union(self.func_args_reg - self.arg_passing_reg)
-        # # B. 声明但未使用的变量中，在RET部分，存在非“返回值寄存器”，记录异常
-        # if len(self.func_ret_reg) > 0:
-        #     error_reg = error_reg.union(self.func_ret_reg - self.ret_value_reg)
+        # B. 声明但未使用的变量中，在RET部分，存在非“返回值寄存器”，记录异常
+        if len(self.func_ret_reg) > 0:
+            error_reg = error_reg.union(self.func_ret_reg - self.ret_value_reg)
 
         return error_reg
     
