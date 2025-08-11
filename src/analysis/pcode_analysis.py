@@ -1,8 +1,4 @@
-from calendar import c
-from itertools import count
 import re
-import sys
-from tokenize import Special
 
 
 # P-Code IR 分析器
@@ -429,7 +425,7 @@ class PcodeIR:
                 record_save_reg = record_save_reg.union(proper_push_reg - all_spec_reg)
         # 记录函数相关寄存器
         self.func_args_reg = self.func_args_reg - record_save_reg
-        self.func_ret_reg = self.func_ret_reg - record_save_reg
+        self.func_ret_reg = self.func_ret_reg.intersection(self.ret_value_reg)
         
         # Display
         if self.debug:
@@ -446,24 +442,21 @@ class PcodeIR:
             print("-" * 100)
             # print("√ The Position of UNKNOWN Goto:", self.unknown_address['goto'])
             print("√ The Position of Call / Ret:", self.addr_call_func)
-            print("√ The Possible Sub-Function Send Arguments:", self.sub_func_args_send_reg)
             print("√ The Possible Sub-Function Receive Arguments:", self.sub_func_args_recv_reg)
             print("*" * 150)
         del context_load_addr, context_save_addr
         
         # 有问题的寄存器反馈
+        # A. 压入栈帧的存储寄存器，未声明次数仅限一次
         error_reg = set()
-        for r in record_save_reg:  # 压栈的寄存器未声明次数仅限一次
+        for r in record_save_reg:  
             if len(und_args_freq.get(r)) > 1:
                 error_reg.add(r)
 
         # 检查调用约定中：
-        # A. 未声明变量中存在非参数传递寄存器，存在，则记录异常
+        # B. 未声明变量中存在非参数传递寄存器，存在，则记录异常
         if len(self.func_args_reg) > 0:
             error_reg = error_reg.union(self.func_args_reg - self.arg_passing_reg)
-        # B. 声明但未使用的变量中，在RET部分，存在非“返回值寄存器”，记录异常
-        if len(self.func_ret_reg) > 0:
-            error_reg = error_reg.union(self.func_ret_reg - self.ret_value_reg)
 
         return error_reg
     

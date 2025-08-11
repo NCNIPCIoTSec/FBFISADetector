@@ -299,7 +299,7 @@ class BinaryBlock:
             try:
                 pcode_ir = ctx.translate(analyzing_bytes+delay_slot, base_address=base_addr+block_offset)
                 # print(pcode_ir)
-                pcode = PcodeIR(ir=str(pcode_ir), registers=self.registers, debug_mode=True)
+                pcode = PcodeIR(ir=str(pcode_ir), registers=self.registers, debug_mode=False)
                 if pcode.logic_analysis():
                     res = True
                     self.pcode = pcode
@@ -322,12 +322,16 @@ class BlocksFilter:
         self.final_blocks = []
 
     @staticmethod
-    def sub_processing(blk_tag: int, block: BinaryBlock) -> tuple[int, tuple[bool, str, dict]]:
+    def sub_reverse_processing(blk_tag: int, block: BinaryBlock) -> tuple[int, tuple[bool, str, dict]]:
         '''
         子进程运行
         '''
         return blk_tag, block.isGhidraReversedPairsValid()
 
+    @staticmethod
+    def sub_ir_processing(blk_tag: int, block: BinaryBlock) -> tuple[int, bool]:
+        return blk_tag, block.isPCodeIRValid()
+    
     def filterBlocksByInnerPairs(self) -> list[int]:
         self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
         return self.have_pairs_blocks
@@ -353,7 +357,7 @@ class BlocksFilter:
                 processes = []
                 for j in self.have_pairs_blocks:
                     processes.append(
-                        pool.apply_async(func=self.sub_processing, args=(j, self.blocks[j]))  # 使用 apply_async 可以独立抓取异常退出，防止子进程无返回阻塞主进程
+                        pool.apply_async(func=self.sub_reverse_processing, args=(j, self.blocks[j]))  # 使用 apply_async 可以独立抓取异常退出，防止子进程无返回阻塞主进程
                     )
                     process_num += 1
                 # 多进程，等待第一个子进程返回结果，期间其他子进程可能也已完成结果并返回（使用轮询反而更慢）
@@ -374,8 +378,30 @@ class BlocksFilter:
         # print(BinaryBlock.reverse_engines)
         return self.reversed_ht_valid_blocks
 
-    def filterBlocksByIRLogic(self) -> list[int]:
-        self.final_blocks = [i for i in self.reversed_ht_valid_blocks if self.blocks[i].isPCodeIRValid()]
+    def filterBlocksByIRLogic(self, open_multi_processing: bool = False, display_error: bool = False) -> list[int]:
+        if open_multi_processing:
+            cpc = cpu_count()
+            with Pool(processes=cpc) as pool:
+                process_num = 0
+                processes = []
+                for j in self.reversed_ht_valid_blocks:
+                    processes.append(
+                        pool.apply_async(func=self.sub_ir_processing, args=(j, self.blocks[j]))  # 使用 apply_async 可以独立抓取异常退出，防止子进程无返回阻塞主进程
+                    )
+                    process_num += 1
+                # 多进程，等待第一个子进程返回结果，期间其他子进程可能也已完成结果并返回（使用轮询反而更慢）
+                for proc in processes:
+                    try:
+                        blk_num, rvs_res = proc.get(timeout=15)
+                        if rvs_res:
+                            self.final_blocks.append(blk_num)
+                    except TimeoutError:
+                        if display_error:
+                            print('[BlocksFilter] Because of invalid bytes, a block cannot be reversed. A subprocess cannot return proper result!!!')
+                    finally:
+                        continue
+        else:
+            self.final_blocks = [i for i in self.reversed_ht_valid_blocks if self.blocks[i].isPCodeIRValid()]
         
         # TT = len(self.final_blocks)
         # FT = len(self.reversed_ht_valid_blocks) - TT
@@ -506,7 +532,7 @@ class BinaryAnalyzer:
         # 过滤
         blk_filter.filterBlocksByInnerPairs()
         blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # 开启多进程
-        blk_filter.filterBlocksByIRLogic()  # IR分析
+        blk_filter.filterBlocksByIRLogic(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # IR分析
         # 评估
         if display_block_info:
             calc_BlockRates(
