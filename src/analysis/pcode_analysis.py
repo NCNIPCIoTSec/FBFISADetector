@@ -288,7 +288,7 @@ class PcodeIR:
         if self.debug:
             print('>> [CLASS PcodeIR] REMAKE ZONES DONE!!!')
 
-    # TODO: 分析可能的参数寄存器
+    # 分析可能的参数寄存器
     def __undeclared_variables_analysis(self):   
         # 获取 SP/PC/LR/RA 的全部名称
         sp_reg = set()
@@ -460,7 +460,7 @@ class PcodeIR:
 
         return error_reg
     
-    # TODO: 变量值生命区间内使用情况分析
+    # 变量值生命区间内使用情况分析
     def __variables_life_zone_analysis(self) -> dict:
         all_valid_exp = {}
         for cvar, cur_info in self.unique_var_life_zone.items():

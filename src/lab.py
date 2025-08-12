@@ -49,26 +49,58 @@ def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
     block_coverage_analysis(bin_blocks=blocks_info['blocks_with_reversing'], svg_file_tail='_reverse_check.svg', start_addr=entry_addr, title="C. B+逆向算法验证")     
 
 
+def find_bin_files(directory: str) -> list:
+    """
+    递归搜索指定目录下的所有.bin文件
+    
+    参数:
+        directory: 要搜索的目录路径
+        
+    返回:
+        包含所有.bin文件路径的列表
+    """
+    bin_files = []
+    
+    # 检查目录是否存在
+    if not os.path.isdir(directory):
+        print(f"Error: dir '{directory}' not exits or not a valid directory!")
+        return bin_files
+    
+    # 遍历目录中的所有项
+    for item in os.listdir(directory):
+        item_path = os.path.join(directory, item)
+        
+        # 如果是目录，则递归搜索
+        if os.path.isdir(item_path):
+            # 将子目录中找到的bin文件添加到结果列表
+            bin_files.extend(find_bin_files(item_path))
+        # 如果是文件且以.bin结尾或者是.bin@md5code形式
+        elif os.path.isfile(item_path) and (item.lower().endswith('.bin') or ".bin@" in item.lower()):
+            bin_files.append(item_path)
+    
+    return bin_files
+
+
 def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
     recorded_files = dict()
     if os.path.exists(record_fpath):
         with open(file=record_fpath, mode='r', encoding='utf-8') as fr:
             recorded_files = json.load(fp=fr)
+    # bin files
+    all_bin_files = find_bin_files(samples_dir)
     # 验证列表
     FT, TF = 0, 0
     echo, count = 0, 0
-    for demo in os.listdir(samples_dir):
-        if demo.endswith('.code') or demo.endswith('.json'):
-            continue
-        file_path = f'{samples_dir}/'+demo
+    for file_path in all_bin_files:
         if (cur_info := recorded_files.get(file_path)) is not None:
             if cur_info['proper']:
                 TF += 1
             else:
                 FT += 1
             continue
+        fnm = file_path.split("/")[-1]
         # 分析与记录
-        print(f'AnalysisRes[{echo}-{count}] {demo}:{arch.upper()} ==> ', end="")
+        print(f'AnalysisRes[{echo}-{count}] {fnm}:{arch.upper()} ==> ', end="")
         ba = BinaryAnalyzer(bin_file_path=file_path)
         cur_arch, cur_data = ba.analyzing()
         judge_res = arch.upper() == cur_arch
@@ -101,8 +133,13 @@ if __name__ == "__main__":
     elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
     # coverage_lab(bin_fpath=sample_path, elf_fpath=elf_path, storage_space_path='/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
     # print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
+    # accuracy_lab(
+    #     samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips', 
+    #     arch='MIPS:BE',
+    #     record_fpath='../output/mips_accuracy_records.json'
+    # )
     accuracy_lab(
-        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips', 
-        arch='MIPS:BE',
-        record_fpath='../output/mips_accuracy_records.json'
+        samples_dir='../output/arm/bin', 
+        arch='ARM:LE',
+        record_fpath='../output/arm-cortex-m_accuracy_records.json'
     )
