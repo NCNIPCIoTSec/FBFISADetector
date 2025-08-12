@@ -64,5 +64,5 @@ if __name__ == "__main__":
             # 如果是文件夹，pass
             if not os.path.isfile(file_name):
                 continue
-            elfFile2binFile(elf_file_load_path=file_name, bin_file_store_dir=OUTPUT_DIR + f'{arh}/')
+            elfFile2binFile(elf_file_load_path=file_name, bin_file_store_dir=OUTPUT_DIR + f'{arh}/bin/')
         

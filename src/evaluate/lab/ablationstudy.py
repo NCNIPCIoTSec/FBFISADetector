@@ -149,7 +149,7 @@ def ablation_study(samples_workspace: str, output_workspace: str):
             if not fnm.endswith('.elf') or bin_file_name is None:
                 continue
             elf_file_path = arch_workspace + '/' + fnm
-            bin_file_path = output_workspace + arch + '/' + bin_file_name
+            bin_file_path = output_workspace + arch + '/bin/' + bin_file_name
             del bin_file_name
             tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, endian=endian_table.get(arch))
             if len(tmp_result) == 0:
