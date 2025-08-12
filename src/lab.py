@@ -5,10 +5,9 @@ import json
 from analysis.instruction_analysis import BinaryBlock, BinaryAnalyzer
 from evaluate.extractor import get_all_blocks
 from evaluate.lab.coveragestudy import block_display
-from evaluate.lab.ablationstudy import ablation_study
 
 
-def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
+def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str, arch: str, endian: str):
     '''
     覆盖率实验  
     - 输入：  
@@ -39,7 +38,7 @@ def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str):
             fw.write(svg_data)
 
     # ================ 预处理 ================
-    blocks_info = get_all_blocks(bin_fpath=bin_fpath, elf_fpath=elf_fpath)
+    blocks_info = get_all_blocks(bin_fpath=bin_fpath, elf_fpath=elf_fpath, arch=arch, endian=endian.upper())
     entry_addr = blocks_info['others']['entry_address']
 
     # ================ RESULT DISPLAY ================

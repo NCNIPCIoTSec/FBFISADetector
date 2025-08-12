@@ -49,7 +49,7 @@ def extract_code_block_from_elf(elf_fpath: str):
     return min_addr, code_addr_record
 
 
-def get_all_blocks(bin_fpath: str, elf_fpath: str, endian: str = 'LE'):
+def get_all_blocks(bin_fpath: str, elf_fpath: str, arch: str, endian: str = 'LE'):
     '''
     获取指定文件所有的BLOCKS
     - 输入：  
@@ -66,11 +66,10 @@ def get_all_blocks(bin_fpath: str, elf_fpath: str, endian: str = 'LE'):
         return (start_pos, size)
 
     # ================ 预处理 ================
+    arch = arch.upper()
     entry_addr, record = extract_code_block_from_elf(elf_fpath=elf_fpath)  # ELF处理
     if len(record) == 0:
         return None
-    storage_path, _ = os.path.split(bin_fpath)  # 获取bin文件路径信息
-    arch = storage_path.split('/')[-1].upper()  # 获取架构信息
     ## 分析器初始化
     print(f'====> {bin_fpath}:{arch}:{endian} <====')
     analyzer = BinaryAnalyzer(bin_fpath)

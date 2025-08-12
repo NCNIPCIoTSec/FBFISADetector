@@ -64,7 +64,7 @@ def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[s
     return fig, ax
 
 
-def get_histogram_data(elf_file_path: str, bin_file_path: str, endian: str):
+def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian: str):
     def shoot(blocks):
         sorted_blocks = sorted(blocks, key=lambda x: x[0])
         shoot_bingo = set()
@@ -95,22 +95,9 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, endian: str):
                 shoot_bingo.add(blk)
                 break
 
-        # i, j = 0, 0
-        # std_num, blk_num = len(standard_blocks), len(blocks)
-        # while i < std_num and j < blk_num:
-        #     std_scope = (standard_blocks[i][0], standard_blocks[i][0] + standard_blocks[i][1])
-        #     cur_scope = (sorted_blocks[j][0], sorted_blocks[j][0] + sorted_blocks[j][1])
-        #     # print(std_scope, cur_scope)
-        #     if (std_scope[0] < cur_scope[0] < std_scope[1]) or (std_scope[0] < cur_scope[1] < std_scope[1]):
-        #         shoot_bingo.add(sorted_blocks[j])
-        #     elif std_scope[1] < cur_scope[0]:
-        #         i += 1
-        #         continue
-        #     j += 1
-
         return shoot_bingo
 
-    blocks_info = get_all_blocks(elf_fpath=elf_file_path, bin_fpath=bin_file_path, endian=endian.upper())
+    blocks_info = get_all_blocks(elf_fpath=elf_file_path, bin_fpath=bin_file_path, arch=arch, endian=endian.upper())
     if blocks_info is None:
         return []
     standard_blocks, pairs_blocks, inner_pairs_blocks, reversing_blocks = set(blocks_info['elf']), set(blocks_info['blocks']), set(blocks_info['blocks_with_inner_pairs']), set(blocks_info['blocks_with_reversing'])
@@ -142,7 +129,7 @@ def ablation_study(samples_workspace: str, output_workspace: str):
         arch_workspace = samples_workspace + arch
         if not arch in endian_table.keys() or os.path.isfile(arch_workspace):
             continue
-        elf2bin_map = {re.sub(r'_0x.*?\.bin', '.elf', fnm):fnm for fnm in os.listdir(output_workspace + arch) if fnm.endswith('.bin')}
+        elf2bin_map = {re.sub(r'_0x.*?\.bin', '.elf', fnm):fnm for fnm in os.listdir(output_workspace + arch + "/bin/") if fnm.endswith('.bin')}
         for fnm in os.listdir(arch_workspace):
             # 仅处理ELF文件
             bin_file_name = elf2bin_map.get(fnm)
@@ -150,8 +137,9 @@ def ablation_study(samples_workspace: str, output_workspace: str):
                 continue
             elf_file_path = arch_workspace + '/' + fnm
             bin_file_path = output_workspace + arch + '/bin/' + bin_file_name
+            print("[ELF-FILE to BIN]", elf_file_path, '==>', bin_file_path)
             del bin_file_name
-            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, endian=endian_table.get(arch))
+            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, arch=arch, endian=endian_table.get(arch))
             if len(tmp_result) == 0:
                 continue
             for i, e in enumerate(tmp_result):
@@ -162,7 +150,7 @@ def ablation_study(samples_workspace: str, output_workspace: str):
     for cent in total_result:
         TT = cent[0]
         TF = cent[1]
-        rate = TT / (TT + TF)
+        rate = TT / (TT + TF) if (TT > 0 and TF > 0) else 0
         print(f"{TT}/({TT}+{TF}) = {rate*100:.2f}%")
 
     return [tuple(ele) for ele in total_result]
