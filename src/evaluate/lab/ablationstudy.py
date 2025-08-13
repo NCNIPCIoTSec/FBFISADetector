@@ -66,17 +66,18 @@ def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[s
 
 def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian: str):
     def shoot(blocks):
-        sorted_blocks = sorted(blocks, key=lambda x: x[0])
         shoot_bingo = set()
-        for blk in sorted_blocks:
+        for blk in blocks:
             cur_scope = (blk[0], blk[0] + blk[1])
             for sb in standard_blocks:
+                # 验证块大小大于标准块，pass
+                if sb[1] < blk[1]:
+                    continue
+                # 验证块与标准块不相交，pass
                 std_scope = (sb[0], sb[0] + sb[1])
                 if (std_scope[0] > cur_scope[1]) or (std_scope[1] < cur_scope[0]):
                     continue
-                if sb[1] > blk[1]:
-                    continue
-                
+                # 交集字节大小获取
                 dis = 0
                 if cur_scope[0] < std_scope[0]:
                     if cur_scope[1] > std_scope[1]:
@@ -88,6 +89,7 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian
                         dis = std_scope[1] - cur_scope[0]
                     else:
                         dis = cur_scope[1] - cur_scope[0]
+                # 交集字节大小太小，pass
                 if dis < 5:
                     continue
                 
@@ -102,18 +104,18 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian
         return []
     standard_blocks, pairs_blocks, inner_pairs_blocks, reversing_blocks = set(blocks_info['elf']), set(blocks_info['blocks']), set(blocks_info['blocks_with_inner_pairs']), set(blocks_info['blocks_with_reversing'])
     standard_blocks = sorted(standard_blocks, key=lambda x: x[0])
-
-    print(standard_blocks)
-    print(reversing_blocks)
-    print("STANDARD BLOCK NUM:", len(standard_blocks))
-    print("BLOCK NUM after ANALYZING:", len(pairs_blocks), '->', len(inner_pairs_blocks), '->', len(reversing_blocks))
-
+    pairs_blocks = sorted(pairs_blocks, key=lambda x: x[0])
+    
     bingo_blocks = shoot(pairs_blocks)
     inner_valid = set(inner_pairs_blocks).intersection(bingo_blocks)
     reverse_valid = set(reversing_blocks).intersection(bingo_blocks)
 
-    print(bingo_blocks, inner_valid, reverse_valid)
-    print(len(bingo_blocks), len(inner_valid), len(reverse_valid))
+    print(">> STD:\n", standard_blocks)
+    print(">> ORG:\n", pairs_blocks)
+    print(">> ORG-VALID:\n", bingo_blocks)
+    print(">> Final-VALID:\n", reverse_valid)
+    print("[STANDARD SEG]", len(standard_blocks))
+    print("[BLOCK NUM after ANALYZING]", len(bingo_blocks), '|', len(inner_valid), '|', len(reverse_valid))
 
     return [(len(standard_blocks), 0), 
             (len(bingo_blocks), len(pairs_blocks) - len(bingo_blocks)), 
@@ -139,7 +141,7 @@ def ablation_study(samples_workspace: str, output_workspace: str):
             bin_file_path = output_workspace + arch + '/bin/' + bin_file_name
             print("[ELF-FILE to BIN]", elf_file_path, '==>', bin_file_path)
             del bin_file_name
-            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, arch=arch, endian=endian_table.get(arch))
+            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, arch=arch.upper(), endian=endian_table.get(arch))
             if len(tmp_result) == 0:
                 continue
             for i, e in enumerate(tmp_result):
@@ -154,4 +156,18 @@ def ablation_study(samples_workspace: str, output_workspace: str):
         print(f"{TT}/({TT}+{TF}) = {rate*100:.2f}%")
 
     return [tuple(ele) for ele in total_result]
+
+
+if __name__ == "__main__":
+    import settings
+
+    data = get_histogram_data(
+        elf_file_path="/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/p2im_drone.elf", 
+        bin_file_path="/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/bin/p2im_drone_0x8000000.bin", 
+        arch="ARM", 
+        endian="LE"
+    )
+    print(data)
+
+
 

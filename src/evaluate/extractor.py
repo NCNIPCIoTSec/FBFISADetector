@@ -81,7 +81,7 @@ def get_all_blocks(bin_fpath: str, elf_fpath: str, arch: str, endian: str = 'LE'
     all_blocks = [get_block_pos(blk) for blk in blk_filter.blocks]
     blocks_with_inner_pairs = [get_block_pos(blk) for blk in [blk_filter.blocks[ind] for ind in blk_filter.have_pairs_blocks]]
     blocks_with_reversing = [get_block_pos(blk) for blk in [blk_filter.blocks[ind] for ind in blk_filter.final_blocks]]
-    print("Filter Res:", len(all_blocks), len(blocks_with_inner_pairs), len(blocks_with_reversing))
+    print(f"[Filter-Res] Pair-Blocks={len(all_blocks)} | Rich-Blocks={len(blocks_with_inner_pairs)} | Valid-Blocks={len(blocks_with_reversing)}")
 
     return {"others": {"entry_address": entry_addr}, "elf": elf_segments, "blocks": all_blocks, "blocks_with_inner_pairs": blocks_with_inner_pairs, "blocks_with_reversing": blocks_with_reversing}
 
