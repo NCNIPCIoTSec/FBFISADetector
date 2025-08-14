@@ -1,0 +1,155 @@
+{
+    "INSTRUCTIONS":{
+        "stwu-sp-reduce": {
+            "endian": "be",
+            "regex": [
+                "\\x94\\x21[\\x80-\\xff]."
+            ],
+            "format": [
+                "\\x94\\x21\\x80\\x00"
+            ],
+            "mask": [
+                "\\xff\\xff\\x80\\x00"
+            ],
+            "descriptions": [
+                "stwu - stwu rS, rA, -0x?? - EA is the sum (rA=r1) + d. The contents of rS=r1 are stored into the word in memory addressed by EA. EA is placed into rA. If rA = 0, the instruction form is invalid"
+            ]
+        },
+        "blr": {
+            "endian": "be",
+            "regex": [
+                "\\x4e\\x80\\x00\\x20"
+            ],
+            "format": [
+                "\\x4e\\x80\\x00\\x20"
+            ],
+            "mask": [
+                "\\xff\\xff\\xff\\xff"
+            ],
+            "descriptions": [
+                "blr - bLR - opcode:6=18, LI:24=0xA00008, AA:1=0, LK:1=0; target_addr specifies the branch target address"
+            ]
+        },
+        "mfspr-lr": {
+            "endian": "be",
+            "regex": [
+                "[\\x7c-\\x7f][\\x08\\x28\\x48\\x68\\x88\\xa8\\xc8\\xe8]\\x02\\xa6"
+            ],
+            "format": [
+                "\\x7c\\x08\\x02\\xa6"
+            ],
+            "mask": [
+                "\\xfc\\x1f\\xff\\xff"
+            ],
+            "descriptions": [
+                "mfspr - mfspr rD, LR - In  the  PowerPC  UISA,  the  SPR  field  denotes  a  special-purpose  register(XER, LR, CTR),  encoded  as shown in Table 9. The contents of the designated special-purpose register are placed into rD."
+            ]
+        },
+        "mtspr-lr": {
+            "endian": "be",
+            "regex": [
+                "[\\x7c-\\x7f][\\x08\\x28\\x48\\x68\\x88\\xa8\\xc8\\xe8]\\x03\\xa6"
+            ],
+            "format": [
+                "\\x7c\\x08\\x03\\xa6"
+            ],
+            "mask": [
+                "\\xfc\\x1f\\xff\\xff"
+            ],
+            "descriptions": [
+                "mtspr - mtspr rS, LR - In  the  PowerPC  UISA,  the  SPR  field  denotes  a  special-purpose  register,  encoded  as shown  in Table  12. The  contents  of rS  are  placed  into  the  designated  special-purpose register."
+            ]
+        },
+        "stmw": {
+            "endian": "be",
+            "regex": [
+                "[\\xbc-\\xbf]..."
+            ],
+            "format": [
+                "\\xbc\\x00\\x00\\x00"
+            ],
+            "mask": [
+                "\\xfc\\x00\\x00\\x00"
+            ],
+            "descriptions": [
+                "stmw - stmw rS, rA, d - EA is the sum (rA|0) + d. n = (32 – rS). n consecutive words starting at EA are stored from the  GPRs  rS  through  r31.  For  example,  if  rS  =  30,  2  words  are  stored.  EA  must  be  a multiple of four. If it is not, either the system alignment exception handler is invoked or the results are boundedly undefined."
+            ]
+        },
+        "lmw": {
+            "endian": "be",
+            "regex": [
+                "[\\xb8-\\xbb]..."
+            ],
+            "format": [
+                "\\xb8\\x00\\x00\\x00"
+            ],
+            "mask": [
+                "\\xfc\\x00\\x00\\x00"
+            ],
+            "descriptions": [
+                "lmw - lmw rS, rA, d - EA is the sum (rA|0) + d. n = (32 – rD). n consecutive words starting at EA are loaded into GPRs rD through r31. EA must be a multiple of four. If it is not, either the system alignment exception handler is invoked or the results are boundedly undefined. If rA is in the range of registers specified to be loaded, including the case in which rA = 0, the instruction form is invalid."
+            ]
+        }
+    },
+    "PAIRS": {
+        "BLOCK_PAIRS": [
+            {   
+                "ins":["stwu-sp-reduce", "blr"],
+                "type": "FUNC-BOUNDARY",
+                "features":{}
+            }
+        ],
+        "INNER_BLOCK_PAIRS": [
+            {
+                "ins": ["stmw", "lmw"],
+                "type": "ARGS_SAVE",
+                "features": {
+                    "register":[
+                        "stmw",
+                        "lmw",
+                        "BE",
+                        [
+                            ["\\x03\\xff\\xff\\xff"], 
+                            ["\\x03\\xff\\xff\\xff"]
+                        ]
+                    ]
+                }
+            },
+            {
+                "ins": ["mfspr-lr", "mtspr-lr"],
+                "type": "ARGS_SAVE",
+                "features": {
+                    "register":[
+                        "mfspr",
+                        "mtspr",
+                        "BE",
+                        [
+                            ["\\x00\\x1f\\xf8\\x00"], 
+                            ["\\x00\\x1f\\xf8\\x00"]
+                        ]
+                    ]
+                }
+            }
+        ]
+    },
+    "OTHERS": {
+        "HighUsage": [],
+        "MemoryArgs":{
+            "address_length": 4,
+            "reverse_unit_size": 4,
+            "min_instr_length": 4,
+            "max_instr_length": 4, 
+            "alignment_size": 4
+        },
+        "registers": {
+            "special": {"r1": "sp", "r2": "reserved", "LR": "lr", "r13": "dp", "xer_so": "XER", "xer_ca": "XER", "xer_ov": "XER", "xer_bc": "XER", "xer_cmp": "XER", "acc": "ACC", "ctr": "CTR", "cr0": "CR", "cr1": "CR", "cr2": "CR", "cr3": "CR", "cr4": "CR", "cr5": "CR", "cr6": "CR", "cr7": "CR", "SPEFSCR": "EFSCR"},
+            "general": ["r0", "r11", "r12", "r14", "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31", "cr2", "cr3", "cr4"],
+            "calling-convention": {
+                "argument-passing": ["r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"],
+                "return-values": ["r3", "r4"],
+                "saved": ["sp", "lr", "r14", "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31"]
+            }
+        },
+        "SupportedEndian": "*"
+    }
+}

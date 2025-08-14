@@ -138,7 +138,7 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian
     
 
 def ablation_study(samples_workspace: str, output_workspace: str, test_arch: str = None):
-    endian_table = {'arm': 'le', 'tricore': 'le', 'mips': 'be', "riscv64": "le"}
+    endian_table = {'arm': 'le', 'tricore': 'le', 'mips': 'be', "riscv64": "le", "powerpc": "be"}
 
     def __study_current_arch__(arch_workspace: str, arch_output_workspace: str, cur_arch: str):
         elf2bin_map = {re.sub(r'_0x.*?\.bin', '.elf', fnm):fnm for fnm in os.listdir(arch_output_workspace + "/bin/") if fnm.endswith('.bin')}

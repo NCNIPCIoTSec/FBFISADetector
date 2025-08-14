@@ -400,16 +400,13 @@ class PcodeIR:
                 if len(push_reg) == 0:
                     continue
                 # 被上下文保存的寄存器存在以下特点：
-                # a. 存储了特殊寄存器 = PC/LR/RA/SP；b. 有压栈信息，也有出栈信息，且压栈和出栈内容一致；
-                cur_pc_reg = None
+                # a. 存储了特殊寄存器 = SP；b. 有压栈信息，也有出栈信息，且压栈和出栈内容一致；
                 cur_sp_reg = None
                 for r in push_reg:
-                    if r in pc_reg:
-                        cur_pc_reg = r
-                    elif r in sp_reg:
+                    if r in sp_reg:
                         cur_sp_reg = r
                 # 没有返回地址、栈指针保存，pass
-                if cur_pc_reg is None or cur_sp_reg is None:
+                if cur_sp_reg is None:
                     continue
                 # 压栈、出栈的寄存器内容不一致，pass
                 temp_push_reg = push_reg.intersection(pop_reg)

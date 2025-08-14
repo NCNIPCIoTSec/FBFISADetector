@@ -21,6 +21,13 @@ GHIDRA_PROCESSOR_ARCHITECTURES = {
             "Cortex", "v4", "v4t", "v5", "v5t", "v6", "v7", "v8", "v8-m", "v8T"
         ]
     },
+    "POWERPC": {
+        "GHIDRA_ARCH_NAME": "PowerPC",
+        "SPACE_SIZE": 32,
+        "VARIANTS": [
+            "default", "4xx"
+        ]
+    },
     "TRICORE": {
         "GHIDRA_ARCH_NAME": "tricore",
         "SPACE_SIZE": 32,
