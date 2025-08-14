@@ -91,12 +91,11 @@ def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
     FT, TF = 0, 0
     echo, count = 0, 0
     for file_path in all_bin_files:
+        # 识别错误再重新检查
         if (cur_info := recorded_files.get(file_path)) is not None:
             if cur_info['proper']:
                 TF += 1
-            else:
-                FT += 1
-            continue
+                continue
         fnm = file_path.split("/")[-1]
         # 分析与记录
         print(f'AnalysisRes[{echo}-{count}] {fnm}:{arch.upper()} ==> ', end="")

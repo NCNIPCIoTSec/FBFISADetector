@@ -1,4 +1,5 @@
 import os
+import re
 
 from settings import SAMPLES_DIR, OUTPUT_DIR
 from elftools.common.exceptions import ELFError
@@ -15,6 +16,8 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
     # 打开 ELF 文件，并读取信息
     with open(file=elf_file_load_path, mode='rb') as f:
         try:
+            if not elf_file_load_path.endswith('.elf'):
+                os.rename(elf_file_load_path, elf_file_load_path+".elf")
             elf = ELFFile(f)
         except ELFError as e:
             print(f"[Error: {e}] ===> 文件<{elf_file_load_path}>不是ELF文件！！！")
@@ -23,6 +26,10 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
         # 获取程序头（Program Header）表
         elf_record = {}
         print(f"[INFO] 原来ELF文件大小为: {len(original_bin)} Bytes")
+        if len(original_bin) < 1000:
+            print(f"[ERROR] 终止！文件太小，可能不适用于当前分析！！!>")
+            return
+        
         for i, segment in enumerate(elf.iter_segments()):
             physical_addr = segment["p_paddr"]
             file_size = segment['p_filesz']
@@ -51,7 +58,8 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
     print(f"[INFO] 新建立的BIN文件大小为: {len(bin_format_content)} Bytes")
     print(f"[INFO] 新建立的BIN物理起始地址为: {hex(file_start_address)}")
     # 将结果存储到目标文件夹内
-    target_path = bin_file_store_dir + f"{os.path.split(elf_file_load_path)[-1].split('.')[0]}_{hex(file_start_address)}.bin"
+    fnm_rmv_elf = os.path.split(elf_file_load_path)[-1].replace(".elf", "")
+    target_path = bin_file_store_dir + f"{fnm_rmv_elf}_{hex(file_start_address)}.bin"
     with open(file=target_path, mode='wb') as fw:
         fw.write(bin_format_content)
     print(f"[INFO] 成功！！！ ===> 处理结果已经存储到文件<{target_path}>")
@@ -59,10 +67,15 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
 
 if __name__ == "__main__":
     for arh in os.listdir(SAMPLES_DIR):
+        out_dir = OUTPUT_DIR + f'{arh}/bin/'
+        processed_bin_files = set([re.sub(r'_0x.*?\.bin', '.elf', fnm) for fnm in os.listdir(out_dir) if fnm.endswith('.bin')])
         for demo in os.listdir(SAMPLES_DIR + f'{arh}/'):
+            # 处理过，pass
+            if demo in processed_bin_files:
+                continue
             file_name = SAMPLES_DIR + f'{arh}/{demo}'
             # 如果是文件夹，pass
             if not os.path.isfile(file_name):
                 continue
-            elfFile2binFile(elf_file_load_path=file_name, bin_file_store_dir=OUTPUT_DIR + f'{arh}/bin/')
+            elfFile2binFile(elf_file_load_path=file_name, bin_file_store_dir=out_dir)
         

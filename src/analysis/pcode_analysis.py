@@ -472,6 +472,9 @@ class PcodeIR:
             # 数据保存至指定地址（数据表）？pass
             if cvar.startswith('ram'):
                 continue
+            # unique变量和IR翻译有关，pass
+            if cvar.startswith('unique'):
+                continue
             # 上下文保存、变量地址空间分配会变化sp指针
             if pos_reg_name in ['sp', 'gp']:  
                 continue

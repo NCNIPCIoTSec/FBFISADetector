@@ -1,5 +1,6 @@
 import os
 import re
+import bisect
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
@@ -66,37 +67,50 @@ def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[s
 
 def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian: str):
     def shoot(blocks):
+        '''
+            输入：
+            blocks - list[tuple]，格式为[(块A起始地址，块A大小), ...]，块起始地址有序不重复
+            全局变量：
+            standard_blocks - list[tuple]，格式为[(块A起始地址，块A大小), ...]，块起始地址有序不重复
+        '''
         shoot_bingo = set()
+        # 提取标准块的起始地址列表，用于二分查找
+        std_starts = [sb[0] for sb in standard_blocks]
+        m = len(standard_blocks)
+        
         for blk in blocks:
-            cur_scope = (blk[0], blk[0] + blk[1])
-            for sb in standard_blocks:
-                # 验证块大小大于标准块，pass
-                if sb[1] < blk[1]:
-                    continue
-                # 验证块与标准块不相交，pass
-                std_scope = (sb[0], sb[0] + sb[1])
-                if (std_scope[0] > cur_scope[1]) or (std_scope[1] < cur_scope[0]):
-                    continue
-                # 交集字节大小获取
-                dis = 0
-                if cur_scope[0] < std_scope[0]:
-                    if cur_scope[1] > std_scope[1]:
-                        dis = std_scope[1] - std_scope[0]
-                    else:
-                        dis = cur_scope[1] - std_scope[0]
-                else:
-                    if cur_scope[1] > std_scope[1]:
-                        dis = std_scope[1] - cur_scope[0]
-                    else:
-                        dis = cur_scope[1] - cur_scope[0]
-                # 交集字节大小太小，pass
-                if dis < 5:
+            cur_start = blk[0]
+            blk_size = blk[1]
+            cur_end = cur_start + blk_size
+            
+            # 二分查找找到第一个起始地址 >= cur_end的标准块索引
+            # 所有可能有交集的标准块都在这个索引之前
+            right = bisect.bisect_left(std_starts, cur_end)
+            
+            # 只检查[0, right)范围内的标准块
+            for i in range(right):
+                sb = standard_blocks[i]
+                sb_size, sb_start = sb[1], sb[0]
+                sb_end = sb_start + sb_size
+                
+                # 标准块大小必须 >= 当前块大小
+                if sb_size < blk_size:
                     continue
                 
-                # print(std_scope, cur_scope)
-                shoot_bingo.add(blk)
-                break
-
+                # 标准块结束地址必须 > 当前块起始地址才可能有交集
+                if sb_end <= cur_start:
+                    continue
+                
+                # 计算交集大小（简化版）
+                overlap_start = max(cur_start, sb_start)
+                overlap_end = min(cur_end, sb_end)
+                dis = overlap_end - overlap_start
+                
+                # 交集大小足够
+                if dis >= 5:
+                    shoot_bingo.add(blk)
+                    break  # 找到一个符合条件的就可以停止检查
+                
         return shoot_bingo
 
     blocks_info = get_all_blocks(elf_fpath=elf_file_path, bin_fpath=bin_file_path, arch=arch, endian=endian.upper())
@@ -110,10 +124,10 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian
     inner_valid = set(inner_pairs_blocks).intersection(bingo_blocks)
     reverse_valid = set(reversing_blocks).intersection(bingo_blocks)
 
-    print(">> STD:\n", standard_blocks)
-    print(">> ORG:\n", pairs_blocks)
-    print(">> ORG-VALID:\n", bingo_blocks)
-    print(">> Final-VALID:\n", reverse_valid)
+    # print(">> STD:\n", standard_blocks)
+    # print(">> ORG:\n", pairs_blocks)
+    # print(">> ORG-VALID:\n", bingo_blocks)
+    # print(">> Final-VALID:\n", reverse_valid)
     print("[STANDARD SEG]", len(standard_blocks))
     print("[BLOCK NUM after ANALYZING]", len(bingo_blocks), '|', len(inner_valid), '|', len(reverse_valid))
 
@@ -123,37 +137,49 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian
             (len(reverse_valid), len(reversing_blocks) - len(reverse_valid))]
     
 
-def ablation_study(samples_workspace: str, output_workspace: str):
-    endian_table = {'arm': 'le', 'tricore': 'le', 'mips': 'be'}
+def ablation_study(samples_workspace: str, output_workspace: str, test_arch: str = None):
+    endian_table = {'arm': 'le', 'tricore': 'le', 'mips': 'be', "riscv64": "le"}
 
-    total_result = [[0, 0], [0, 0], [0, 0], [0, 0]]
-    for arch in os.listdir(samples_workspace):
-        arch_workspace = samples_workspace + arch
-        if not arch in endian_table.keys() or os.path.isfile(arch_workspace):
-            continue
-        elf2bin_map = {re.sub(r'_0x.*?\.bin', '.elf', fnm):fnm for fnm in os.listdir(output_workspace + arch + "/bin/") if fnm.endswith('.bin')}
+    def __study_current_arch__(arch_workspace: str, arch_output_workspace: str, cur_arch: str):
+        elf2bin_map = {re.sub(r'_0x.*?\.bin', '.elf', fnm):fnm for fnm in os.listdir(arch_output_workspace + "/bin/") if fnm.endswith('.bin')}
         for fnm in os.listdir(arch_workspace):
             # 仅处理ELF文件
             bin_file_name = elf2bin_map.get(fnm)
             if not fnm.endswith('.elf') or bin_file_name is None:
                 continue
             elf_file_path = arch_workspace + '/' + fnm
-            bin_file_path = output_workspace + arch + '/bin/' + bin_file_name
+            bin_file_path = output_workspace + cur_arch + '/bin/' + bin_file_name
             print("[ELF-FILE to BIN]", elf_file_path, '==>', bin_file_path)
             del bin_file_name
-            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, arch=arch.upper(), endian=endian_table.get(arch))
+            # 验证
+            tmp_result = get_histogram_data(elf_file_path=elf_file_path, bin_file_path=bin_file_path, arch=cur_arch.upper(), endian=endian_table.get(cur_arch))
             if len(tmp_result) == 0:
                 continue
             for i, e in enumerate(tmp_result):
                 total_result[i][0] += e[0]
                 total_result[i][1] += e[1]
+
+    # 分析
+    total_result = [[0, 0], [0, 0], [0, 0], [0, 0]]
+    if test_arch is not None:  # 单类架构分析
+        test_arch = test_arch.lower()
+        if test_arch in endian_table.keys():
+            __study_current_arch__(arch_workspace=samples_workspace + test_arch, arch_output_workspace=output_workspace + test_arch, cur_arch=test_arch)
+    else:  # 多架构分析
+        for arch in os.listdir(samples_workspace):
+            arch_workspace = samples_workspace + arch
+            if not arch in endian_table.keys() or os.path.isfile(arch_workspace):
+                continue
+            __study_current_arch__(arch_workspace=arch_workspace, arch_output_workspace=output_workspace + arch, cur_arch=arch)
+
+        
     
     # 百分比
     for cent in total_result:
         TT = cent[0]
         TF = cent[1]
-        rate = TT / (TT + TF) if (TT > 0 and TF > 0) else 0
-        print(f"{TT}/({TT}+{TF}) = {rate*100:.2f}%")
+        rate = (TT / (TT + TF))*100 if (TT > 0 and TF > 0) else 0
+        print(f"{TT}/({TT}+{TF}) = {rate:.2f}%")
 
     return [tuple(ele) for ele in total_result]
 
@@ -161,13 +187,38 @@ def ablation_study(samples_workspace: str, output_workspace: str):
 if __name__ == "__main__":
     import settings
 
-    data = get_histogram_data(
-        elf_file_path="/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/p2im_drone.elf", 
-        bin_file_path="/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/bin/p2im_drone_0x8000000.bin", 
-        arch="ARM", 
-        endian="LE"
-    )
-    print(data)
+    samples = [
+        (
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/p2im_drone.elf", 
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/bin/p2im_drone_0x8000000.bin", 
+            "ARM", "LE"
+        ),
+        (
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/tricore/ASCLIN_Shell_UART_1_KIT_TC297_TFT.elf", 
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/tricore/bin/ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x60000000.bin", 
+            "TriCore", "LE"
+        ),
+        (
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/tricore/ASCLIN_LIN_Master_1_KIT_TC297_TFT.elf",
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/tricore/bin/ASCLIN_LIN_Master_1_KIT_TC297_TFT_0x60000000.bin",
+            "TriCore", "LE"
+        ),
+        (
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/mips/helloworld_be_mips_r3000.elf",
+            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/mips/bin/helloworld_be_mips_r3000_0x0.bin",
+            "MIPS", "BE"
+        ),
+    ]
+
+    for felf, fbin, arch, endian in samples:
+        print("=>" * 75)
+        data = get_histogram_data(
+            elf_file_path=felf, 
+            bin_file_path=fbin, 
+            arch=arch, 
+            endian=endian
+        )
+        print(data)
 
 
 

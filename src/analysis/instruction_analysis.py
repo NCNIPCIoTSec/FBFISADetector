@@ -35,7 +35,7 @@ GHIDRA_PROCESSOR_ARCHITECTURES = {
             "default", "R6", "micro"
         ]
     },
-    "RISCV": {
+    "RISCV64": {
         "GHIDRA_ARCH_NAME": "RISCV",
         "SPACE_SIZE": 64,
         "VARIANTS": [

@@ -15,6 +15,21 @@
                 "SW - sw ra, local_i(xx) - The least-significant 32-bit word of GPR rt is  stored  in  memory  at  the  location  specified  by  the  aligned  effective address. The 16-bit signed offset is added to the contents of GPR base to form the effective address. - Variant: MIPS32"
             ]
         },
+       "addiu-sp-sp-reduce": {
+            "endian": "be",
+            "regex": [
+                "\\x27\\xbd[\\x80-\\xff]."
+            ],
+            "format": [
+                "\\x27\\xbd\\x80\\x00"
+            ],
+            "mask": [
+                "\\xff\\xff\\x80\\x00"
+            ],
+            "descriptions": [
+                "ADDIU - addiu sp, sp, -0x?? - The  16-bit  signed  immediate(neg)  is  added  to  the  32-bit  value  in  GPR rs=sp  and  the  32-bit  arithmetic  result  is  placed  into GPR rt=sp"
+            ]
+        },
         "jr-ra": {
             "endian": "be",
             "regex": [
@@ -79,19 +94,9 @@
     "PAIRS": {
         "BLOCK_PAIRS": [
             {
-                "ins": ["sw-ra", "jr-ra"],
-                "type": "ARGS_SAVE",
-                "features": {
-                    "register": [
-                        "sw",
-                        "jr",
-                        "BE",
-                        [
-                            ["\\x00\\x1f\\x00\\x00"],
-                            ["\\x03\\xe0\\x00\\x00"]
-                        ]
-                    ]
-                }
+                "ins": ["addiu-sp-sp-reduce", "jr-ra"],
+                "type": "FUNC-BOUNDARY",
+                "features": {}
             }
         ],
         "INNER_BLOCK_PAIRS": [
