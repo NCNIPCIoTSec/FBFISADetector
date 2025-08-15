@@ -48,53 +48,62 @@ def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str, arch: 
     block_coverage_analysis(bin_blocks=blocks_info['blocks_with_reversing'], svg_file_tail='_reverse_check.svg', start_addr=entry_addr, title="C. B+逆向算法验证")     
 
 
-def find_bin_files(directory: str) -> list:
+def find_specific_files(directory: str, file_type: str, default_null_suffix: str = 'elf') -> list:
     """
-    递归搜索指定目录下的所有.bin文件
+    递归搜索指定目录下的所有.xx文件
     
     参数:
         directory: 要搜索的目录路径
-        
+        file_type: 要搜索的文件后缀
+        default_null_suffix: 无后缀文件默认的文件格式
     返回:
-        包含所有.bin文件路径的列表
+        包含所有.xx文件路径的列表
     """
-    bin_files = []
+    cur_files = []
     
     # 检查目录是否存在
     if not os.path.isdir(directory):
         print(f"Error: dir '{directory}' not exits or not a valid directory!")
-        return bin_files
+        return cur_files
     
     # 遍历目录中的所有项
+    file_type = file_type.lower()
+    default_null_suffix = default_null_suffix.lower()
     for item in os.listdir(directory):
         item_path = os.path.join(directory, item)
         
         # 如果是目录，则递归搜索
+        suffix = f".{file_type}"
+        suffix_mid = f".{file_type}@"
         if os.path.isdir(item_path):
             # 将子目录中找到的bin文件添加到结果列表
-            bin_files.extend(find_bin_files(item_path))
+            cur_files.extend(find_specific_files(item_path, file_type, default_null_suffix))
         # 如果是文件且以.bin结尾或者是.bin@md5code形式
-        elif os.path.isfile(item_path) and (item.lower().endswith('.bin') or ".bin@" in item.lower()):
-            bin_files.append(item_path)
+        elif os.path.isfile(item_path):
+            if item.lower().endswith(suffix) or suffix_mid in item.lower():
+                cur_files.append(item_path)
+            elif file_type == default_null_suffix and '.' not in item:
+                cur_files.append(item_path)
     
-    return bin_files
+    return cur_files
 
 
-def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
+def accuracy_lab(samples_dir: str, arch: str, record_fpath: str, files_type: str = "bin"):
     recorded_files = dict()
     if os.path.exists(record_fpath):
         with open(file=record_fpath, mode='r', encoding='utf-8') as fr:
             recorded_files = json.load(fp=fr)
     # bin files
-    all_bin_files = find_bin_files(samples_dir)
+    all_files = []
+    all_files = find_specific_files(samples_dir, files_type)
     # 验证列表
-    FT, TF = 0, 0
+    TT, TF = 0, 0
     echo, count = 0, 0
-    for file_path in all_bin_files:
+    for file_path in all_files:
         # 识别错误再重新检查
         if (cur_info := recorded_files.get(file_path)) is not None:
             if cur_info['proper']:
-                TF += 1
+                TT += 1
                 continue
         fnm = file_path.split("/")[-1]
         # 分析与记录
@@ -103,9 +112,9 @@ def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
         cur_arch, cur_data = ba.analyzing()
         judge_res = arch.upper() == cur_arch
         if judge_res:
-            TF += 1
+            TT += 1
         else:
-            FT += 1
+            TF += 1
         print(f'{cur_arch} | {cur_data} | Judge={judge_res}')
         # 记录
         recorded_files[file_path] = {"arch": arch.upper(), "predict_arch": cur_arch, "predict_arch_data": str(cur_data), "proper": judge_res}
@@ -119,7 +128,11 @@ def accuracy_lab(samples_dir: str, arch: str, record_fpath: str):
     if (echo + count) > 0:
         with open(file=record_fpath, mode='w', encoding='utf-8') as fw:
             json.dump(obj=recorded_files, fp=fw)
-    print(f'RATE: {TF}/{TF+FT}={TF/(FT+TF)*100:.2f}%')
+    # 计算准确率
+    if TF > 0 or TT > 0:
+        print(f'RATE: {TT}/{TF+TT}={TT/(TT+TF)*100:.2f}%')
+    else:
+        print(f'RATE: 0.00%')
         
 
 if __name__ == "__main__":
@@ -131,13 +144,37 @@ if __name__ == "__main__":
     elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
     # coverage_lab(bin_fpath=sample_path, elf_fpath=elf_path, storage_space_path='/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/')
     # print(ablation_study(settings.SAMPLES_DIR, settings.OUTPUT_DIR))
-    # accuracy_lab(
-    #     samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips', 
-    #     arch='MIPS:BE',
-    #     record_fpath='../output/mips_accuracy_records.json'
-    # )
+    print(" =>=>=> Analysis ARM Firmware <=<=<= ")
     accuracy_lab(
         samples_dir='../output/arm/bin', 
         arch='ARM:LE',
         record_fpath='../output/arm-cortex-m_accuracy_records.json'
+    )
+    print(" =>=>=> Analysis ARMHF-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/armhf', 
+        arch='ARM:LE',
+        record_fpath='../output/armhf_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis RISCV64-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/riscv64', 
+        arch='RISCV64:LE',
+        record_fpath='../output/riscv64_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis MIPS-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips', 
+        arch='MIPS:BE',
+        record_fpath='../output/mips_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis PowerPC-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/powerpc', 
+        arch='PowerPC:BE',
+        record_fpath='../output/powerpc_accuracy_records.json',
+        files_type='elf'
     )

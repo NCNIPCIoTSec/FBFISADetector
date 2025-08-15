@@ -266,7 +266,6 @@ class BinaryBlock:
         # print(flag, 'ghidra', reverse_engine_config)
         return flag, 'ghidra', reverse_engine_config
     
-    # TODO: 未完成
     def isPCodeIRValid(self) -> bool:
         '''
         存储机制已经修改，需注意
