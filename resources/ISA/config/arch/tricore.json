@@ -101,14 +101,59 @@
                 "ST.B - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the byte value in the eight least-significant bits of data register D[a] to the byte memory location specified by the addressing mode.",
                 "ST.W - A[b], off16, D[a] (BOL)(Base + Long Offset Addressing Mode) - Store the word value in data register D[a] to the memory location specified by the addressing mode."
             ]
+        },
+        "mfcr": {
+            "endian":"be", 
+            "regex": [
+                "..[\\x10\\x20\\x30\\40\\x50\\x60\\x70\\x80\\x90\\xa0\\xb0\\xc0\\xd0\\xe0\\xf0]\\x4d"
+            ],
+            "format": [
+                "\\x00\\x00\\x00\\x4d"
+            ],
+            "mask": [
+                "\\x00\\x00\\x0f\\xff"
+            ],
+            "descriptions": [
+                "mfcr - mfcr dx, #imm - Move the contents of the Core Special Function Register (CSFR), selected by the value const16, to data register D[c].The  CSFR  address  is  a  const16  byte  offset  from  the  CSFR  base  address.  It  must  be  word-aligned  (the  least-significant two bits equal zero). Nonaligned addresses have an undefined effect."
+            ]
+        },
+        "sub.a-a10": {
+            "endian":"be", 
+            "regex": [
+                ".\\x20"
+            ],
+            "format": [
+                "\\x00\\x20"
+            ],
+            "mask": [
+                "\\x00\\xff"
+            ],
+            "descriptions": [
+                "sub.a - sub.a a10, #imm - A[10] = A[10] - zero_ext(const8); Subtract the contents of address register A[b] from the contents of address register A[a] and put the result in address register A[c]. "
+            ]
+        },
+        "mov.aa-a15-a4": {
+            "endian":"be", 
+            "regex": [
+                "\\x4f\\x40"
+            ],
+            "format": [
+                "\\x4f\\x40"
+            ],
+            "mask": [
+                "\\xff\\xff"
+            ],
+            "descriptions": [
+                "mov.aa - mov.aa a15, a4 - Move the contents of address register A[b] to address register A[a]."
+            ]
         }
     },
     "PAIRS": {
         "BLOCK_PAIRS": [
             {
-                "ins":["call-r-func", "ret"],
-                "type": "BRANCH",
-                "features":{}
+                "ins": ["mov.aa-a15-a4", "ret"],
+                "type": "FUNC-ARG-PASS",
+                "features": {}
             }
         ],
         "INNER_BLOCK_PAIRS": [

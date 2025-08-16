@@ -473,6 +473,8 @@ class BinaryAnalyzer:
         
         # 从BLOCK中识别
         block_pairs = []
+        if display_block_info:
+            print(f'-------------------- {isa_arch}:{endian} --------------------')
         for bp in ins_pair_dict['PAIRS']['BLOCK_PAIRS']:
             k = bp["type"]
             # print(f"PROCESS BLOCK TYPE - {k}")
@@ -492,7 +494,6 @@ class BinaryAnalyzer:
             )
             # 评估
             if display_block_info:
-                print(f'-------------------- {isa_arch}:{endian} --------------------')
                 calc_BlockPairInstrRates((head_ins, tail_ins), [possible_block_head, possible_block_tail], len(self.binary_res))
             # ======================================== <指令对儿组合> ========================================
             # print([instr.hex() for instr, _, _ in possible_block_head])
