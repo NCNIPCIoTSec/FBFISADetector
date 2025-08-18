@@ -343,6 +343,10 @@ class BlocksFilter:
         return self.have_pairs_blocks
     
     def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False, display_error: bool = False) -> list[int]:
+        # 消融，如果没有块内指令对
+        if len(self.have_pairs_blocks) == 0:
+            self.have_pairs_blocks = range(len(self.blocks))
+
         # 记录反汇编验证后的架构
         def record_reversing_result(blk_tag: int, rvs_res: tuple[bool, str, dict]):
             is_reversed, engine, config_info = rvs_res
