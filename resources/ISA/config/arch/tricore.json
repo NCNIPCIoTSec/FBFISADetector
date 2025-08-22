@@ -34,6 +34,21 @@
                 "RET - SR - Return from a function that was invoked with a CALL instruction. The return address is in register A[11] (return address). The caller's upper context register values are restored as part of the return operation."
             ]
         },
+        "rfe": {
+            "endian": "be",
+            "regex": [
+                "\\x80\\x00"
+            ],
+            "format":[
+                "\\x80\\x00"
+            ],
+            "mask":[
+                "\\xff\\xff"
+            ],
+            "descriptions":[
+                "RFE - Return From Exception - Return from an interrupt service routine or trap handler to the task whose saved upper context is specified by thecontents of the Previous Context Information register (PCXI). The contents are normally the context of the task thatwas interrupted or that took a trap. However in some cases Task Management software may have altered thecontents of the PCXI register to cause another task to be dispatched.The return PC value is taken from register A[11] (register address) in the current context. In parallel with the jump tothe return PC address, the upper context registers and PSW in the saved context are restored."
+            ]
+        },
         "movh.a": {
             "endian":"be",
             "regex": [
@@ -129,29 +144,49 @@
                 "\\x00\\xff"
             ],
             "descriptions": [
-                "sub.a - sub.a a10, #imm - A[10] = A[10] - zero_ext(const8); Subtract the contents of address register A[b] from the contents of address register A[a] and put the result in address register A[c]. "
+                "SUB.A - sub.a a10, #imm - A[10] = A[10] - zero_ext(const8); Subtract the contents of address register A[b] from the contents of address register A[a] and put the result in address register A[c]. "
             ]
         },
-        "mov.aa-a15-a4": {
+        "mov.aa-ax-a4": {
             "endian":"be", 
             "regex": [
-                "\\x4f\\x40"
+                "[\\x40-\\x4f]\\x40"
             ],
             "format": [
-                "\\x4f\\x40"
+                "\\x40\\x40"
             ],
             "mask": [
-                "\\xff\\xff"
+                "\\xf0\\xff"
             ],
             "descriptions": [
-                "mov.aa - mov.aa a15, a4 - Move the contents of address register A[b] to address register A[a]."
+                "MOV.AA - mov.aa ax, a4 - Move the contents of address register A[b] to address register A[a]."
+            ]
+        },
+        "mov-dx-d4": {
+            "endian":"be", 
+            "regex": [
+                "[\\x40-\\x4f]\\x02"
+            ],
+            "format": [
+                "\\x40\\x02"
+            ],
+            "mask": [
+                "\\xf0\\xff"
+            ],
+            "descriptions": [
+                "MOV - mov dx, d4 - Move the contents of data register D[4] to data register D[x]."
             ]
         }
     },
     "PAIRS": {
         "BLOCK_PAIRS": [
             {
-                "ins": ["mov.aa-a15-a4", "ret"],
+                "ins": ["mov.aa-ax-a4", "ret"],
+                "type": "FUNC-ARG-PASS",
+                "features": {}
+            },
+            {
+                "ins": ["mov-dx-d4", "ret"],
                 "type": "FUNC-ARG-PASS",
                 "features": {}
             }
@@ -231,7 +266,7 @@
             "general": ["a2", "a3", "a4", "a5", "a6", "a7", "a12", "a13", "a14", "a15", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15"],
             "calling-convention": {
                 "argument-passing": ["a4", "a5", "a6", "a7", "a4", "d4", "d5", "d6", "d7"],
-                "return-values": ["d2", "a2"],
+                "return-values": ["d2", "a2", "d3", "a3"],
                 "saved": ["sp", "ra", "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15", "a12", "a13", "a14", "a15"]
             }
         },

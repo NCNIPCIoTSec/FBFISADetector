@@ -38,6 +38,7 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
             seg_tag = f"segment{i}"
             offset = segment["p_offset"]
             elf_record[seg_tag] = {"offset": offset, "address": physical_addr, "file_size": file_size, "memory_size": mem_size}
+    
     # 按照ADDRESS对SEG信息进行排序
     sorted_elf_record = sorted(elf_record, key=lambda key: elf_record[key]["address"])
     # print([hex(elf_record[k]["address"]) for k in sorted_elf_record])
@@ -66,10 +67,23 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
 
 
 if __name__ == "__main__":
+    tricore_samples = [
+        "ADC_Background_Scan_1_KIT_TC297_TFT.elf",
+        "ADC_Filtering_1_KIT_TC375_LK.elf",
+        "ASCLIN_LIN_Master_1_KIT_TC297_TFT.elf",
+        "ASCLIN_Shell_UART_1_KIT_TC297_TFT.elf",
+        "iLLD_TC375_ADS_Bluetooth_RFCOMM.elf",
+        "GPIO_LED_Button_1_KIT_TC297_TFT.elf",
+        "SPI_CPU_1_KIT_TC275_LK.elf",
+        "UART_DMA_Transfer_1_KIT_TC297_TFT"
+    ]
+
     for arh in os.listdir(SAMPLES_DIR):
         out_dir = OUTPUT_DIR + f'{arh}/bin/'
         processed_bin_files = set([re.sub(r'_0x.*?\.bin', '.elf', fnm) for fnm in os.listdir(out_dir) if fnm.endswith('.bin')])
         for demo in os.listdir(SAMPLES_DIR + f'{arh}/'):
+            if arh == "tricore" and demo not in tricore_samples:
+                continue
             # 处理过，pass
             if demo in processed_bin_files:
                 continue
@@ -78,4 +92,3 @@ if __name__ == "__main__":
             if not os.path.isfile(file_name):
                 continue
             elfFile2binFile(elf_file_load_path=file_name, bin_file_store_dir=out_dir)
-        

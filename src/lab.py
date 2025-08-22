@@ -105,6 +105,10 @@ def accuracy_lab(samples_dir: str, arch: str, record_fpath: str, files_type: str
             if cur_info['proper']:
                 TT += 1
                 continue
+            else:
+                print("ERROR:", file_path, "==>", cur_info['predict_arch'])
+                TF += 1
+            continue
         fnm = file_path.split("/")[-1]
         # 分析与记录
         print(f'AnalysisRes[{echo}-{count}] {fnm}:{arch.upper()} ==> ', end="")
@@ -176,5 +180,12 @@ if __name__ == "__main__":
         samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/powerpc', 
         arch='PowerPC:BE',
         record_fpath='../output/powerpc_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis TriCore-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../resources/samples/tricore', 
+        arch='tricore:LE',
+        record_fpath='../output/tricore_accuracy_records.json',
         files_type='elf'
     )

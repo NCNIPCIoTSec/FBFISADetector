@@ -19,6 +19,7 @@ def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[s
     - title: 图表标题  
     - x_label: X轴标签  
     - y_label: Y轴标签  
+    - hist_hw_rate: 直方图宽度与高度的比例
     """
     # 确保颜色数量与段数匹配
     if len(seg_colors) != segments or len(data[0]) != segments:
@@ -124,6 +125,9 @@ def get_histogram_data(elf_file_path: str, bin_file_path: str, arch: str, endian
     inner_valid = set(inner_pairs_blocks).intersection(bingo_blocks)
     reverse_valid = set(reversing_blocks).intersection(bingo_blocks)
 
+    if len(bingo_blocks) == 0:
+        return []
+
     # print(">> STD:\n", standard_blocks)
     # print(">> ORG:\n", pairs_blocks)
     # print(">> ORG-VALID:\n", bingo_blocks)
@@ -172,8 +176,6 @@ def ablation_study(samples_workspace: str, output_workspace: str, test_arch: str
                 continue
             __study_current_arch__(arch_workspace=arch_workspace, arch_output_workspace=output_workspace + arch, cur_arch=arch)
 
-        
-    
     # 百分比
     for cent in total_result:
         TT = cent[0]
@@ -187,38 +189,9 @@ def ablation_study(samples_workspace: str, output_workspace: str, test_arch: str
 if __name__ == "__main__":
     import settings
 
-    samples = [
-        (
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/p2im_drone.elf", 
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/bin/p2im_drone_0x8000000.bin", 
-            "ARM", "LE"
-        ),
-        (
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/tricore/ASCLIN_Shell_UART_1_KIT_TC297_TFT.elf", 
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/tricore/bin/ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x60000000.bin", 
-            "TriCore", "LE"
-        ),
-        (
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/tricore/ASCLIN_LIN_Master_1_KIT_TC297_TFT.elf",
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/tricore/bin/ASCLIN_LIN_Master_1_KIT_TC297_TFT_0x60000000.bin",
-            "TriCore", "LE"
-        ),
-        (
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/mips/helloworld_be_mips_r3000.elf",
-            "/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/mips/bin/helloworld_be_mips_r3000_0x0.bin",
-            "MIPS", "BE"
-        ),
-    ]
-
-    for felf, fbin, arch, endian in samples:
-        print("=>" * 75)
-        data = get_histogram_data(
-            elf_file_path=felf, 
-            bin_file_path=fbin, 
-            arch=arch, 
-            endian=endian
-        )
-        print(data)
+    single_arch = "powerpc"
+    data = ablation_study(samples_workspace=settings.SAMPLES_DIR, output_workspace=settings.OUTPUT_DIR, test_arch=single_arch)
+    print(data)
 
 
 
