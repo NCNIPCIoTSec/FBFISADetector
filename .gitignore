@@ -13,4 +13,7 @@
 
 /output
 
+/extend_experiments/comparison_lab/isadetect/resources/data
+/extend_experiments/comparison_lab/isadetect/resources/models
+
 /requirements/!README.md

@@ -1,4 +1,4 @@
-# FirmISAIdentify
+# FBFISADetector (Filter Based Firmware ISA Detector)
 **<font color="red">主要目标：</font>** 识别**单机固件（Monolithic Firmware）的指令集架构**  
 **<font color="red">MAIN PURPOSE:</font>** Identify **the ISA (Instrunction Set Architecture) of Monolithic Firmware**
 
