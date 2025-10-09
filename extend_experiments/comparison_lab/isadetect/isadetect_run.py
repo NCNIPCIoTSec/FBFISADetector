@@ -1,12 +1,10 @@
 # 基于PyWeka，加载模型simple_logistic.model，并将data中的数据一行一行作为输入，将模型的预测结果存储在一个列表中
 
 import os
-import sys
 # 导入readt.py中的函数
 from readt import read_csv_to_list
 # 导入PyWeka相关库
 from weka.core.converters import Loader
-from weka.core.dataset import Instances, Instance
 from weka.classifiers import Classifier
 from weka.core import serialization
 import weka.core.jvm as jvm
