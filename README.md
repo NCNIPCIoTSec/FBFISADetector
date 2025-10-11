@@ -1,6 +1,6 @@
 # FBFISADetector (Filter Based Firmware ISA Detector)
-**<font color="red">主要目标：</font>** 识别**单机固件（Monolithic Firmware）的指令集架构**  
-**<font color="red">MAIN PURPOSE:</font>** Identify **the ISA (Instrunction Set Architecture) of Monolithic Firmware**
+**<font color="red">主要目标：</font>** 识别单机固件（Monolithic Firmware）的**指令集架构（包含字节序）**  
+**<font color="red">MAIN PURPOSE:</font>** Identify **the ISA (Instrunction Set Architecture) and Endianness** of Monolithic Firmware
 
 ## 前期配置
 **下载虚拟环境：** 使用的Python的virtualenv库（[环境配置参考链接](https://blog.csdn.net/littlefun591/article/details/135740075)）  
@@ -36,6 +36,43 @@
   cd capstone/bindings/python && python setup.py install
   ```
 
+## 运行
+
+测试单个二进制文件
+```shell
+cd src
+python detectisa.py -f <path/to/binary> # 不开启多进程测试二进制文件
+python detectisa.py -p -f <path/to/binary> # 开启多进程测试二进制文件
+python detectisa.py -p -a <arch> -f <path/to/binary> # 开启多进程测试二进制文件，并且仅测试制定ISA架构
+```
+未完善批量测试二进制文件功能，目前方法参考 `src/main.py`；
+```shell
+python main.py
+```
+注意：
+
+```python
+# <setting.py>
+# 获取所有架构的**配置文件路径**信息
+ARCH_INFO = dict()
+for arch_file in os.listdir(CONFIG_DIR+'arch/'):
+    arch = arch_file.replace(".json", "")
+    ARCH_INFO[arch] = CONFIG_DIR+'arch/'+arch_file
+
+# 初始化分析器 - 静态函数
+BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
+BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=CONFIG_DIR+"call_branch.json")
+
+# <main.py>
+# 开启多进程分析，不调用此函数则默认单进程，分析速度会慢很多 - 静态函数
+BinaryAnalyzer.openMultiProcessing() 
+
+# 测试二进制文件示例
+bin_file_path = "<path/to/binary>"
+ba = BinaryAnalyzer(bin_file_path=bin_file_path)
+ba.analyzing()
+```
+
 ## 嵌入式单机固件的指令集架构识别的意义
 - 主要意义：
   - **降低识别成本**。无需再依据产品型号、硬件型号手动搜索MCU使用的指令集架构；  
@@ -53,11 +90,11 @@
   - CCFA S&P'21 - [Enabling the Large-Scale Emulation of Internet of Things Firmware With Heuristic Workarounds](https://ieeexplore.ieee.org/abstract/document/9431371)
 - 【机器学习方法】对*nix系统仓库的二进制可执行文件进行ISA识别
   - **CCFC DFRWS'15 - [Automatic classification of object code using machine learning](https://www.sciencedirect.com/science/article/pii/S1742287615000523)**  
-  <font color="red">首次提出基于机器学习方法的指令集架构（Instructions Set Architecture, ISA）识别。</font>基于 **“字节值直方图（byte-value histograms）”** 来保存操作码（opcode）密度（$Opcode\_Density = \dfrac{length\_of\_opcode}{average\_instruction\_length}$），基于特殊双字节值 **0x0001和0xfffe** 来判断目标指令集架构的字节序，以{value-0, ..., value-255, count-0x0001, count-0x0100, count-0xfffe, count-0xfeff}这种260维向量的形式表示二进制文件的内容特征。   
+  <font color="red">首次提出基于机器学习方法的指令集架构（Instructions Set Architecture, ISA）识别。</font>基于 **“字节值直方图（byte-value histograms）”** 来保存操作码（opcode）密度（ $Opcode\_Density = \dfrac{length\_of\_opcode}{average\_instruction\_length}$ ），基于特殊双字节值 **0x0001和0xfffe** 来判断目标指令集架构的字节序，以{value-0, ..., value-255, count-0x0001, count-0x0100, count-0xfffe, count-0xfeff}这种260维向量的形式表示二进制文件的内容特征。   
   **缺点：** 在嵌入式固件环境中，大量的数据表并不是会对字节频率的特征产生混淆；并且，在指令中，操作数（Operand）种存在的立即数或者寄存器标识，在字节的维度上，仍然会对字节频率分析的方法带来很大干扰。  
   - **CCFC DIMVA'18 - [ELISA: ELiciting ISA of Raw Binaries for Fine-Grained Code and Data Separation](https://link.springer.com/chapter/10.1007/978-3-319-93411-2_16)**  
   **主要完成了两项工作：** ISA识别、“代码与数据段”的区分。  
-  **其ISA识别的工作** 是在[Clemens](https://www.sciencedirect.com/science/article/pii/S1742287615000523)的工作基础之上，增添了对常见架构的函数前置、后端字节的模式匹配（the patterns of **known function prologues and epilogues** from the archinfo project part of angr），以$f_{pattern} = \dfrac{\#match(pattern, file)}{len(file)}$ 作为特征向量中的一个值，增强模型对架构特征的识别能力。  
+  **其ISA识别的工作** 是在[Clemens](https://www.sciencedirect.com/science/article/pii/S1742287615000523)的工作基础之上，增添了对常见架构的函数前置、后端字节的模式匹配（the patterns of **known function prologues and epilogues** from the archinfo project part of angr），以 $f_{pattern} = \dfrac{\char35match(pattern, file)}{len(file)}$ 作为特征向量中的一个值，增强模型对架构特征的识别能力。  
   **注：** archinfo中的known function prologues and epilogues在angr项目中的主要目的是对函数边界的识别，使得逆向分析器可以更精确地构建控制流图(Control Flow Graphic，CFG)。  
   **缺点：** 虽然ELISA使用了模式匹配来统计架构种函数体的前置、后端字节在文件中的比例，但是，除了数据表带来的干扰效果外，当模式识别的识别的位置处于操作数（operand）上时，这种错位也会产生误识别。此外，这类方法虽然关注到了函数体，但是，仍然没有对函数内指令间的语义特征实施更多的关注，仍然停留在频率分析上，这导致操作数/数据表对整体结果的影响仍然很大。    
   - **ACM CODASPY'20 - [ISAdetect: Usable Automated Detection of CPU Architecture and Endianness for Executable Binary Files and Object Code](https://dl.acm.org/doi/10.1145/3374664.3375742)**  
@@ -66,8 +103,8 @@
   <font color="red">首次提出更 **细粒度** 的特征抽取方法</font>，基于(1,2)-gram TF-IDF对二进制文件中的字节频率信息进行抽取，其中，他们还使用NLP领域的逆向文档频率（Inverse Document Frequency）。  
   根据下面三个算式可以了解到，基于TF-IDF的方法能够削弱无意义字节对识别的影响，例如固件刷写后存在的大量0xff或0x00字节。本文作者对字节频率的统计使用了1-gram TF-IDF方法对值为0-255的字节频率进行向量化，他们认为1字节的统计方法能尽可能地保留opcode信息且有更好地兼容性（由于不同架构的指令长度不同）。他们还是用了2-gram TF-IDF的方法进行字节序的识别，因为他们认为字节序可以通过两字节就能够进行判断，如0x0001->0x0100、0xfffe->0xfeff。他们还在使用3-gram在特征向量尾部添加了5000个常见的3字节模式，增强架构特征。此外，由于opcode的大小通常小于1字节，所以他们认为基于字节的分析方法并不能即将opcode特征更好地识别出来，所以，他们采用了字符级（character-level）的分析方法，即，将二进制内容每个字节进行base-16、32、64、85编码，使得字节转成字符，使得每个字符拟合更多的位信息。此方法还能降低向量长度，增强分析效率。  
   **缺点：** Base编码放大位特征是个很好的思路，但是，根据其实验发现Base-85与Base-32的聚类效果并不好，这里我们猜测：由于指令长度大都是小于等于4字节（32位），Base-85和Base-32则分别是将4字节转5字符、5字节转8字符，而1. 将一条指令变成多指令间的重组，可能会将位信息扰乱；2. 当编码后一个字符能容纳位信息比例越小，所产生的噪声信息就越大。
-  $$TF(τ) = \dfrac{\text{\# of times τ appeared in the document}}{\text{\# of terms in the document}}, \text{τ is target term of document}$$  
-  $$\text{IDF}(τ) = log(\dfrac{\text{\# of documents in the corpus} + 1}{\text{\# of documents with τ} + 1}) + 1$$  
+  $$TF(τ) = \dfrac{\text{\char35 of times τ appeared in the document}}{\text{\char35 of terms in the document}}, \text{τ is target term of document}$$  
+  $$\text{IDF}(τ) = log(\dfrac{\text{\char35 of documents in the corpus} + 1}{\text{\char35 of documents with τ} + 1}) + 1$$  
   $$\text{TF-IDF}(τ) = TF(τ) × \text{IDF}(τ)$$  
 
 ## 挑战  
