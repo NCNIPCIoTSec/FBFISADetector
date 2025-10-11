@@ -90,7 +90,7 @@ ba.analyzing()
   - CCFA S&P'21 - [Enabling the Large-Scale Emulation of Internet of Things Firmware With Heuristic Workarounds](https://ieeexplore.ieee.org/abstract/document/9431371)
 - 【机器学习方法】对*nix系统仓库的二进制可执行文件进行ISA识别
   - **CCFC DFRWS'15 - [Automatic classification of object code using machine learning](https://www.sciencedirect.com/science/article/pii/S1742287615000523)**  
-  <font color="red">首次提出基于机器学习方法的指令集架构（Instructions Set Architecture, ISA）识别。</font>基于 **“字节值直方图（byte-value histograms）”** 来保存操作码（opcode）密度（ $Opcode\_Density = \dfrac{\text{length\_of\_opcode}}{\text{average\_instruction\_length}}$ ），基于特殊双字节值 **0x0001和0xfffe** 来判断目标指令集架构的字节序，以{value-0, ..., value-255, count-0x0001, count-0x0100, count-0xfffe, count-0xfeff}这种260维向量的形式表示二进制文件的内容特征。   
+  <font color="red">首次提出基于机器学习方法的指令集架构（Instructions Set Architecture, ISA）识别。</font>基于 **“字节值直方图（byte-value histograms）”** 来保存操作码（opcode）密度（ $Opcode\_Density = \dfrac{length\_of\_opcode}{average\_instruction\_length}$ ），基于特殊双字节值 **0x0001和0xfffe** 来判断目标指令集架构的字节序，以{value-0, ..., value-255, count-0x0001, count-0x0100, count-0xfffe, count-0xfeff}这种260维向量的形式表示二进制文件的内容特征。   
   **缺点：** 在嵌入式固件环境中，大量的数据表并不是会对字节频率的特征产生混淆；并且，在指令中，操作数（Operand）种存在的立即数或者寄存器标识，在字节的维度上，仍然会对字节频率分析的方法带来很大干扰。  
   - **CCFC DIMVA'18 - [ELISA: ELiciting ISA of Raw Binaries for Fine-Grained Code and Data Separation](https://link.springer.com/chapter/10.1007/978-3-319-93411-2_16)**  
   **主要完成了两项工作：** ISA识别、“代码与数据段”的区分。  
