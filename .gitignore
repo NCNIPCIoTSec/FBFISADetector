@@ -11,7 +11,12 @@
 /resources/data/firmwares
 /resources/samples/tricore
 
-/output
+/output/arm
+/output/mips
+/output/powerpc
+/output/riscv64
+/output/tricore
+/output/x86
 
 /extend_experiments/comparison_lab/isadetect/resources/data
 /extend_experiments/comparison_lab/isadetect/resources/models
