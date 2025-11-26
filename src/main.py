@@ -17,31 +17,28 @@ def main():
     # print("\n\n ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================")
     # ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'tricore/ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin')
     # ba.analyzing()
-    
-    # Real Firmware Test
-    print("\n\n ======================== <TRICORE:TC1797_FLASH.bin> ========================")
-    ba = BinaryAnalyzer(bin_file_path=SAMPLES_DIR + 'tricore/bin/TC1797_FLASH.bin')
-    ba.analyzing()
 
     # All Demo Test
     for arch in os.listdir(OUTPUT_DIR):
-        for demo in os.listdir(OUTPUT_DIR+f'{arch}/'):
-            file_path = OUTPUT_DIR+f'{arch}/'+demo
+        if not os.path.isdir(OUTPUT_DIR+f'{arch}/'):
+            print(f'[SKIP FILE] {arch}')
+            continue
+        print(f"\n\n ======================== <{arch.upper()}> ========================")
+        for demo in os.listdir(OUTPUT_DIR+f'{arch}/bin/'):
+            file_path = OUTPUT_DIR+f'{arch}/bin/'+demo
             if not os.path.isfile(file_path) or not file_path.endswith('.bin'):
                 continue
-            print(f"\n\n ======================== <{arch}:{demo}> ========================")
+            print(f'[RUN FILE] {demo}')
             ba = BinaryAnalyzer(bin_file_path=file_path)
             cur_arch, cur_data = ba.analyzing()
-            print(f'[{arch.upper}] ==> {cur_arch} | {cur_data}')
-
-
+            print(f'\t[{arch.upper()}] ==> {cur_arch} | {cur_data}')
 
 if __name__ == "__main__":
     # # PowerPC分析
     # for ppc_demo in os.listdir(SAMPLES_DIR+'ppc/'):
     #     print(f'==== {ppc_demo} ====')
     #     powerPCAnalysis(SAMPLES_DIR+'ppc/'+ppc_demo)
-    with open(file='../resources/records.log', mode='w') as fw:
+    with open(file='../output/records.log', mode='w') as fw:
         original_stdout = sys.stdout
         sys.stdout = fw
         main()

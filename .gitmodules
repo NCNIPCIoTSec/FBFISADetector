@@ -1,0 +1,12 @@
+[submodule "relative_works/isadetect"]
+	path = relative_works/isadetect
+	url = git@github.com:kairis/isadetect.git
+[submodule "requirements/monolithic-firmware-collection"]
+	path = requirements/monolithic-firmware-collection
+	url = git@github.com:ucsb-seclab/monolithic-firmware-collection.git
+[submodule "requirements/capstone"]
+	path = requirements/capstone
+	url = git@github.com:capstone-engine/capstone.git
+[submodule "requirements/pypcode"]
+	path = requirements/pypcode
+	url = git@github.com:angr/pypcode.git

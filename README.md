@@ -18,22 +18,23 @@
   ```
 **创建虚拟环境并进入**  
   ```shell
-  mkvirtualenv FirmISAIdentify --python=$(which python)
-  workon FirmISAIdentify
+  # 本实验使用的Python版本为3.11.11  
+  mkvirtualenv FBFISADetector --python=$(which python)
+  workon FBFISADetector
   ```
 **下载项目并下载依赖的库**  
   - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr
   - **需要github上自行下载的有：** capstone, pypcode  
-  ```shell
-  git clone https://github.com/NCNIPCIoTSec/FirmISAIdentify.git
-  cd FirmISAIdentify 
-  git install -r requirements.txt
-  mkdir requirements && cd requirements
-  git clone https://github.com/angr/pypcode.git
+  ```bash
+  git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
+  cd FBFISADetector 
+  pip install -r requirements.txt
+  cd requirements
   cd pypcode && python setup.py install
-  cd ..
-  git clone https://github.com/capstone-engine/capstone.git
-  cd capstone/bindings/python && python setup.py install
+  # 按需下载
+  # cd ..
+  # git clone https://github.com/capstone-engine/capstone.git
+  # cd capstone/bindings/python && python setup.py install
   ```
 
 ## 运行
