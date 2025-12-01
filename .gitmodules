@@ -10,3 +10,6 @@
 [submodule "requirements/pypcode"]
 	path = requirements/pypcode
 	url = git@github.com:angr/pypcode.git
+[submodule "requirements/python-javabridge"]
+	path = requirements/python-javabridge
+	url = https://github.com/LeeKamentsky/python-javabridge.git

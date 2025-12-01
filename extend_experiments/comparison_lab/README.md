@@ -9,4 +9,4 @@
   Kairajarvi Sami, Andrei Costin, and Timo Hamalainen. ”ISAdetect: Usable automated detection of CPU architecture and endianness for executable binary files and object code.” In Proceedings of the Tenth ACM Conference on Data and Application Security and Privacy, pp. 376-380. 2020.  
   Open Source State: <font color="green">Yes</font>   
   Open Source Contents: Datasets (from debian linux repository); Models (Decision Tree, Random Tree, Random Forest, SMO, Logistic Regression, BayesNet, Naive Bayes, 1-NN, 3-NN, Neural Net)
-  Lab Requirements: python 3.12, javabridge, python-weka-wrapper
+  Lab Requirements: python 3.11, numpy, javabridge(install from source), python-weka-wrapper3

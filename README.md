@@ -31,6 +31,8 @@
   pip install -r requirements.txt
   cd requirements
   cd pypcode && python setup.py install
+  cd ..
+  cd python-javabridge && pip install -e .
   # 按需下载
   # cd ..
   # git clone https://github.com/capstone-engine/capstone.git

@@ -316,7 +316,7 @@ def calculate_accuracy_statistics(predictions, actual_labels):
     
     return stats
 
-def print_accuracy_statistics(statistics, model_type):
+def print_accuracy_statistics(statistics, model_type, output_file_dir):
     # 创建报告字符串，使用显式的UTF-8编码确保中文正确显示
     report_lines = []
     report_lines.append("="*70)
@@ -380,16 +380,21 @@ def print_accuracy_statistics(statistics, model_type):
     print(report)
     
     # 保存到文件，使用UTF-8编码确保中文正确显示
+    output_file = os.path.join(output_file_dir, f"accuracy_report_{model_type}.txt")
     try:
-        with open(f"accuracy_report_{model_type}.txt", "w", encoding="utf-8-sig") as f:  # 使用utf-8-sig解决BOM问题
+        # 检查文件夹是否存在，不存在就创建
+        if not os.path.exists(output_file_dir):
+            os.makedirs(output_file_dir)
+        # 记录结果
+        with open(output_file, "w", encoding="utf-8-sig") as f:  # 使用utf-8-sig解决BOM问题
             f.write(report)
-        print(f"\n准确率报告已保存到 accuracy_report_{model_type}.txt")
+        print(f"\n准确率报告已保存到 {output_file}")
     except Exception as e:
         print(f"保存报告时出错: {str(e)}")
         import traceback
         traceback.print_exc()
 
-def main(model_type):
+def main(model_type, output_file_dir, instances):
      # 加载模型
     # model_path = "resources/models/simple_logistic.model"
     # model_path = "resources/models/smo.model"
@@ -428,41 +433,49 @@ def main(model_type):
         # 使用修改后的calculate_accuracy_statistics函数
         accuracy_statistics = calculate_accuracy_statistics(predictions, actual_labels)
         # 打印准确率统计信息
-        print_accuracy_statistics(accuracy_statistics, model_type)
+        print_accuracy_statistics(accuracy_statistics, model_type, output_file_dir)
 
-if __name__ == "__main__":
+
+def main_run(csv_file_path: str, output_file_dir: str):
+     # 读取数据
+    print(f"正在读取数据: {csv_file_path}")
+    data = read_csv_to_list(csv_file_path)
+    print(f"成功读取 {len(data)} 行数据")
+    
+    # 显示数据头部信息
+    if data and len(data) > 0:
+        print(f"数据头部包含 {len(data[0])} 个属性")
+        print(f"前5个属性名: {data[0][:5]}")
+        print(f"最后一个属性名(类别): {data[0][-1]}")
+    
+    # 创建Instances对象
+    print("正在创建Instances对象...")
+    instances = create_instances_from_csv(data)
+    if instances is None:
+        raise Exception("无法创建Instances对象")
+    print(f"成功创建包含 {instances.num_instances} 个实例的Instances对象")
+    print(f"类别索引设置为: {instances.class_index}")
+    
+    # DONE: "simple_logistic", "smo", "random_forest", "ibk", "ibk3"
+    # ERROR: naive_bayes
+    for md_tp in ["bayesnet", "mlp", "j48", "random_tree"]:
+        print(f"========================>> 正在处理模型类型: {md_tp} <<========================")
+        main(md_tp, output_file_dir, instances)
+
+
+def single_file_run(csv_file_path: str, output_file_dir: str = "./output/"):
+    '''
+    运行ISADetect模型，对指定CSV文件进行预测
+    - 参数:
+      - csv_file_path: 输入CSV文件路径，包含待预测的二进制特征数据
+    '''
     try:
         # 启动JVM
         print("正在启动JVM...")
         jvm.start(packages=True)
         print("JVM启动成功")
-        
-        # 读取数据
-        csv_file_path = "resources/data/ISAdetect_full_binaries_features.csv"
-        print(f"正在读取数据: {csv_file_path}")
-        data = read_csv_to_list(csv_file_path)
-        print(f"成功读取 {len(data)} 行数据")
-        
-        # 显示数据头部信息
-        if data and len(data) > 0:
-            print(f"数据头部包含 {len(data[0])} 个属性")
-            print(f"前5个属性名: {data[0][:5]}")
-            print(f"最后一个属性名(类别): {data[0][-1]}")
-        
-        # 创建Instances对象
-        print("正在创建Instances对象...")
-        instances = create_instances_from_csv(data)
-        if instances is None:
-            raise Exception("无法创建Instances对象")
-        print(f"成功创建包含 {instances.num_instances} 个实例的Instances对象")
-        print(f"类别索引设置为: {instances.class_index}")
-        
-        # DONE: "simple_logistic", "smo", "random_forest", "ibk", "ibk3"
-        # ERROR: naive_bayes
-        for md_tp in ["bayesnet", "mlp", "j48", "random_tree"]:
-            print(f"========================>> 正在处理模型类型: {md_tp} <<========================")
-            main(md_tp)
-    
+        # 运行主函数
+        main_run(csv_file_path, output_file_dir)
     except Exception as e:
         print(f"程序执行出错: {e}")
         import traceback
@@ -472,3 +485,6 @@ if __name__ == "__main__":
         print("正在关闭JVM...")
         jvm.stop()
         print("JVM已关闭")
+
+if __name__ == "__main__":
+    single_file_run(csv_file_path="./resources/data/ISAdetect_full_binaries_features.csv")
