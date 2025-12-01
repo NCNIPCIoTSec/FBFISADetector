@@ -24,7 +24,7 @@
   ```
 **下载项目并下载依赖的库**  
   - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr
-  - **需要github上自行下载的有：** capstone, pypcode  
+  - **需要github上自行下载的有：** capstone, pypcode, python-javabridge  
   ```bash
   git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   cd FBFISADetector 
