@@ -2,7 +2,7 @@
 
 import os
 # 导入readt.py中的函数
-from readt import read_csv_to_list
+from tools.readt import read_csv_to_list
 # 导入PyWeka相关库
 from weka.core.converters import Loader
 from weka.classifiers import Classifier
