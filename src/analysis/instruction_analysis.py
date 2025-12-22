@@ -456,6 +456,7 @@ class BinaryAnalyzer:
         with open(file=bin_file_path, mode='rb') as fr:
             self.binary_res = fr.read()
         self.display = display
+        self.possible_variants = {"capstone": {}, "ghidra": {}}  # 记录每个架构的可能变体
 
     def archAnalysis(self, isa_arch: str, endian: str, ins_pair_dict: dict = None, display_block_info: bool = False):
         '''
@@ -544,6 +545,11 @@ class BinaryAnalyzer:
         blk_filter.filterBlocksByInnerPairs()
         blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # 开启多进程
         blk_filter.filterBlocksByIRLogic(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # IR分析
+        # 记录当前架构的可能变体
+        for engine in BinaryBlock.reverse_engines.keys():
+            if len(BinaryBlock.reverse_engines[engine]) == 0:
+                continue
+            self.possible_variants[engine][f"{isa_arch}:{endian}"] = [info[1] for info in BinaryBlock.reverse_engines[engine].items() if info[1][-1] > 0]
         # 评估
         if display_block_info:
             calc_BlockRates(

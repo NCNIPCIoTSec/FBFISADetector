@@ -26,7 +26,9 @@ if __name__ == "__main__":
     if args.arch is None:
         arch_info = cur_analyzer.analyzing()
         print(f"Predict Arch: {arch_info}")
+        print(f"Possible Variants: {cur_analyzer.possible_variants['ghidra'][arch_info[0]]}")
     else:
         arch_res = cur_analyzer.specific_arch_analyzing(arch=args.arch)
         print(f"TEST ARCH = {args.arch} | Result: {arch_res}")
+        print(f"Possible Variants: {cur_analyzer.possible_variants['ghidra'][arch_res[0]]}")
     
