@@ -4,6 +4,12 @@
 /src/demo*.ipynb
 /src/test*.ipynb
 
+/src/__pycache__
+/src/analysis/__pycache__
+/src/evaluate/__pycache__
+/src/evaluate/lab/__pycache__
+/src/utils/__pycache__
+
 /.history
 /.vscode
 /.idea
