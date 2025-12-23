@@ -23,8 +23,8 @@
   workon FBFISADetector
   ```
 **下载项目并下载依赖的库**  
-  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr
-  - **需要github上自行下载的有：** capstone, pypcode, python-javabridge  
+  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr, capstone
+  - **需要github上自行下载的有：** pypcode, python-javabridge, *capstone  
   ```bash
   git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   cd FBFISADetector 
@@ -33,7 +33,7 @@
   cd pypcode && python setup.py install
   cd ..
   cd python-javabridge && pip install -e .
-  # 按需下载
+  # （不建议）按需下载，最新版的capstone会支持更多的架构，但是与pip下载的angr不兼容；因此，本次实验主要依赖逆向引擎-Ghidra-from pypcode
   # cd ..
   # git clone https://github.com/capstone-engine/capstone.git
   # cd capstone/bindings/python && python setup.py install

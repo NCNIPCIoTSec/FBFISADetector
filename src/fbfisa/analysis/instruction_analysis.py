@@ -5,12 +5,12 @@ import pypcode
 from multiprocessing import Pool, cpu_count
 from multiprocessing.context import TimeoutError
 
-from evaluate.calc import calc_BlockRates, calc_BlockPairInstrRates
-from utils.config_processor import features_configure_init
-from utils.translator import hexString2bytes, string2bytes_regex
-from utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
-from analysis.branch_analysis import get_branch_addr_multiprocessing
-from analysis.pcode_analysis import PcodeIR
+from fbfisa.evaluate.calc import calc_BlockRates, calc_BlockPairInstrRates
+from fbfisa.utils.config_processor import features_configure_init
+from fbfisa.utils.translator import hexString2bytes, string2bytes_regex
+from fbfisa.utils.bytes_op import bytes_reverse, get_register_num, bytes_fmt_compare
+from fbfisa.analysis.branch_analysis import get_branch_addr_multiprocessing
+from fbfisa.analysis.pcode_analysis import PcodeIR
 
 
 GHIDRA_PROCESSOR_ARCHITECTURES = {
@@ -438,7 +438,7 @@ class BinaryAnalyzer:
             cls.supported_arch[k.upper()] = supported_arch_info[k]
 
     @classmethod
-    def loadBrachCalculationExpressions(cls, branch_calc_info_path: str = "../resources/ISA/config/call_branch.json"):
+    def loadBrachCalculationExpressions(cls, branch_calc_info_path: str):
         with open(file=branch_calc_info_path, mode='r', encoding='utf-8') as fr:
             cls.branch_calc_info = json.load(fp=fr)
 

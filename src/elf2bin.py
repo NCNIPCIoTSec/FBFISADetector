@@ -1,7 +1,6 @@
 import os
 import re
 
-from settings import SAMPLES_DIR, OUTPUT_DIR
 from elftools.common.exceptions import ELFError
 from elftools.elf.elffile import ELFFile
 
@@ -67,6 +66,8 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
 
 
 if __name__ == "__main__":
+    from fbfisa.settings import SAMPLES_DIR, OUTPUT_DIR
+    
     tricore_samples = [
         "ADC_Background_Scan_1_KIT_TC297_TFT.elf",
         "ADC_Filtering_1_KIT_TC375_LK.elf",

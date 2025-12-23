@@ -1,22 +1,14 @@
 import os
-import sys
 
-from settings import OUTPUT_DIR, SAMPLES_DIR
-from analysis.instruction_analysis import BinaryAnalyzer
+from fbfisa.settings import OUTPUT_DIR, CONFIG_DIR, ARCH_INFO, SAMPLES_DIR
+from fbfisa.analysis.instruction_analysis import BinaryAnalyzer
 
 
 def main():
     BinaryAnalyzer.openMultiProcessing()
-    # Demo Test
-    # print("\n\n ======================== <ARM:FreeRTOS_ThreadCreation> ========================")
-    # ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'arm/FreeRTOS_ThreadCreation_0x8000000.bin')
-    # ba.analyzing()
-    # print("\n\n ======================== <MIPS:busybox_0x0.bin> ========================")
-    # ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'mips/busybox_0x0.bin')
-    # ba.analyzing()
-    # print("\n\n ======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================")
-    # ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'tricore/ADC_Background_Scan_1_KIT_TC297_TFT_0x80000000.bin')
-    # ba.analyzing()
+    # 初始化分析器
+    BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
+    BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=os.path.join(CONFIG_DIR, "call_branch.json"))
 
     # All Demo Test
     for arch in os.listdir(OUTPUT_DIR):
@@ -33,14 +25,39 @@ def main():
             cur_arch, cur_data = ba.analyzing()
             print(f'\t[{arch.upper()}] ==> {cur_arch} | {cur_data}')
 
+def test_partial():
+    BinaryAnalyzer.openMultiProcessing()
+    # 初始化分析器
+    BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
+    BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=os.path.join(CONFIG_DIR, "call_branch.json"))
+    
+    # Demo Test
+    print("======================== <ARM:FreeRTOS_ThreadCreation> ========================")
+    ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'arm/bin/FreeRTOS_ThreadCreation_0x8000000.bin')
+    ba.analyzing()
+    cur_arch, cur_data = ba.analyzing()
+    print(f'[ARM] ==> {cur_arch} | {cur_data}')
+    
+    print("\n======================== <MIPS:busybox_0x0.bin> ========================")
+    ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'mips/bin/busybox_0x0.bin')
+    ba.analyzing()
+    cur_arch, cur_data = ba.analyzing()
+    print(f'[MIPS] ==> {cur_arch} | {cur_data}')
+    
+    print("\n======================== <TRICORE:ADC_Background_Scan_1_KIT_TC297_TFT> ========================")
+    ba = BinaryAnalyzer(bin_file_path=OUTPUT_DIR + 'tricore/bin/ADC_Background_Scan_1_KIT_TC297_TFT_0x60000000.bin')
+    ba.analyzing()
+    cur_arch, cur_data = ba.analyzing()
+    print(f'[TRICORE] ==> {cur_arch} | {cur_data}')
+
 if __name__ == "__main__":
-    # # PowerPC分析
-    # for ppc_demo in os.listdir(SAMPLES_DIR+'ppc/'):
-    #     print(f'==== {ppc_demo} ====')
-    #     powerPCAnalysis(SAMPLES_DIR+'ppc/'+ppc_demo)
-    with open(file='../output/records.log', mode='w') as fw:
-        original_stdout = sys.stdout
-        sys.stdout = fw
-        main()
-        sys.stdout = original_stdout
+    # 批量测试
+    # import sys
+    # with open(file='../output/records.log', mode='w') as fw:
+    #     original_stdout = sys.stdout
+    #     sys.stdout = fw
+    #     main()
+    #     sys.stdout = original_stdout
+    # demo测试
+    test_partial()
 

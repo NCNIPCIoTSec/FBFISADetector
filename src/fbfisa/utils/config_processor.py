@@ -1,4 +1,4 @@
-from utils.translator import hexString2bytes
+from fbfisa.utils.translator import hexString2bytes
 
 
 # TODO：完善features的预处理

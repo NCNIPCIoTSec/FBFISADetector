@@ -1,21 +1,13 @@
-/resources/tmp*
-/src/demo*.py
-/src/test*.py
-/src/demo*.ipynb
-/src/test*.ipynb
-
-/src/__pycache__
-/src/analysis/__pycache__
-/src/evaluate/__pycache__
-/src/evaluate/lab/__pycache__
-/src/utils/__pycache__
-
 /.history
 /.vscode
 /.idea
+/build
+*.egg-info
+
 /relative_works/datasets
 /resources/data/firmwares
 /resources/samples/tricore
+/resources/tmp*
 
 /output/arm
 /output/mips
@@ -23,6 +15,3 @@
 /output/riscv64
 /output/tricore
 /output/x86
-
-/extend_experiments/comparison_lab/isadetect/resources/data
-/extend_experiments/comparison_lab/isadetect/resources/models

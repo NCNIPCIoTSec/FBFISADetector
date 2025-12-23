@@ -1,7 +1,7 @@
 import re
 import sympy as sp
 
-from utils.bytes_op import bytes_reverse, bit_string2bytes, bytes2bit_string
+from fbfisa.utils.bytes_op import bytes_reverse, bit_string2bytes, bytes2bit_string
 
 
 def get_branch_addr_multiprocessing(instr_info: dict):

@@ -1,10 +1,9 @@
 import os
-import re
 import json
 
-from analysis.instruction_analysis import BinaryBlock, BinaryAnalyzer
-from evaluate.extractor import get_all_blocks
-from evaluate.lab.coveragestudy import block_display
+from fbfisa.analysis.instruction_analysis import BinaryBlock, BinaryAnalyzer
+from fbfisa.evaluate.extractor import get_all_blocks
+from fbfisa.evaluate.lab.coveragestudy import block_display
 
 
 def coverage_lab(bin_fpath: str, elf_fpath: str, storage_space_path: str, arch: str, endian: str):
@@ -140,9 +139,12 @@ def accuracy_lab(samples_dir: str, arch: str, record_fpath: str, files_type: str
         
 
 if __name__ == "__main__":
-    import settings
+    from fbfisa.settings import CONFIG_DIR, ARCH_INFO
 
     BinaryAnalyzer.openMultiProcessing()
+    # 初始化分析器
+    BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
+    BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=os.path.join(CONFIG_DIR, "call_branch.json"))
     
     sample_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/FreeRTOS_ThreadCreation_0x8000000.bin'
     elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'

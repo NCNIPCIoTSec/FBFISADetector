@@ -4,7 +4,7 @@ from elftools.common.exceptions import ELFError
 from elftools.elf.elffile import ELFFile
 from elftools.elf.sections import SymbolTableSection
 
-from analysis.instruction_analysis import BinaryAnalyzer, BinaryBlock
+from fbfisa.analysis.instruction_analysis import BinaryAnalyzer, BinaryBlock
 
 
 def extract_code_block_from_elf(elf_fpath: str):

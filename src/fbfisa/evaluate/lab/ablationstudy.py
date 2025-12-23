@@ -4,7 +4,7 @@ import bisect
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from evaluate.extractor import get_all_blocks
+from fbfisa.evaluate.extractor import get_all_blocks
 
 
 def create_segmented_histogram(data: list[tuple], bin_num: int, bin_tags: list[str], segments: int, seg_tags: list[str], seg_colors: list[str], title="Piecewise Histogram", x_label="x axis", y_label="y axis", hist_hw_rate: float = 0.07, plane_height: int = 10):
