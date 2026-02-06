@@ -23,7 +23,7 @@
   workon FBFISADetector
   ```
 **下载项目并下载依赖的库**  
-  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr, capstone
+  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr, capstone, pyghidra, ghidra-stubs==<your-ghidra-version>
   - **需要github上自行下载的有：** pypcode, python-javabridge, *capstone  
   ```bash
   git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
@@ -33,6 +33,15 @@
   cd pypcode && python setup.py install
   cd ..
   cd python-javabridge && pip install -e .
+  cd ../ghidra/
+  # 编译 ghidra
+  # 请先确认java版本、Gradle版本、Python版本是否与项目要求一致
+  # 如果java版本有问题，在~/.gradle/gradle.properties中指定java安装路径
+  # org.gradle.java.home=/your/jdk/path/jdk-21.0.10+7/
+  # Maven仓库：echo "/your/maven/repository" > /your/ghidra/path/ghidra.repos.config
+  gradle -I gradle/support/fetchDependencies.gradle
+  gradle buildGhidra
+  ./gradlew prepDev
   # （不建议）按需下载，最新版的capstone会支持更多的架构，但是与pip下载的angr不兼容；因此，本次实验主要依赖逆向引擎-Ghidra-from pypcode
   # cd ..
   # git clone https://github.com/capstone-engine/capstone.git
@@ -74,6 +83,11 @@ BinaryAnalyzer.openMultiProcessing()
 bin_file_path = "<path/to/binary>"
 ba = BinaryAnalyzer(bin_file_path=bin_file_path)
 ba.analyzing()
+```
+## 打包成库
+运行主目录中的 `setup.py` 打包成库
+```shell
+python -m pip install .
 ```
 
 ## 嵌入式单机固件的指令集架构识别的意义

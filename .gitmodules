@@ -13,3 +13,6 @@
 [submodule "requirements/python-javabridge"]
 	path = requirements/python-javabridge
 	url = https://github.com/LeeKamentsky/python-javabridge.git
+[submodule "requirements/ghidra"]
+	path = requirements/ghidra
+	url = git@github.com:NationalSecurityAgency/ghidra.git
