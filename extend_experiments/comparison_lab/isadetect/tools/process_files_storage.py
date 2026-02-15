@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 import shutil
@@ -31,6 +32,8 @@ def convert_paths(input_path: str, output_path: str, arch: str = "armhf", copy_f
                 last_dir = d_xxx_dir[0].strip('/')
                 new_path = os.path.join(output_path, last_dir, arch, file)
                 output_dir = os.path.join(output_path, last_dir, arch)
+            if '@' not in file:
+                new_path = new_path+'@'+str(hashlib.md5(input_file_path.encode('utf-8')).hexdigest())
             print(f"{input_file_path} -> {new_path}")
             if copy_files:
                 # 检查文件是否存在，存在就pass
