@@ -9,6 +9,8 @@
 /resources/samples/tricore
 /resources/tmp*
 
+/temp
+
 /output/arm
 /output/mips
 /output/powerpc

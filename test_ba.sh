@@ -1,2 +1,2 @@
-cd ./src/basolver
-python base_address_solver.py
+cd ./src
+python -m basolver.base_address_solver
