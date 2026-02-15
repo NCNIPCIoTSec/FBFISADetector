@@ -18,17 +18,15 @@ def convert_paths(input_path: str, output_path: str, arch: str = "armhf", copy_f
     converted_count = 0
     
     for root, dirs, files in os.walk(input_path):
+        # 获取D_XXX目录
+        d_xxx_dir = re.findall(r'/D_[0-9a-zA-Z]+', root)
         for file in files:
-            if not file.endswith('.bin') and len(re.findall(r'\.bin@[0-9a-fA-F]+$', file)) == 0:
+            if len(re.findall(r'\.bin(@[0-9a-zA-Z]+)?$', file)) == 0:
                 continue
-            
-            # 获取D_XXX目录
-            d_xxx_dir = re.findall(r'/D_[0-9a-zA-Z]+/', root)
-            
             # 移动的目标目录
             input_file_path = os.path.join(root, file)
-            new_path = os.path.join(output_path, "root", arch, file)
-            output_dir = os.path.join(output_path, "root", arch)
+            new_path = os.path.join(output_path, "others", arch, file)
+            output_dir = os.path.join(output_path, "others", arch)
             if len(d_xxx_dir) > 0:
                 last_dir = d_xxx_dir[0].strip('/')
                 new_path = os.path.join(output_path, last_dir, arch, file)

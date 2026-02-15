@@ -47,7 +47,7 @@ def real_firm_run(input_path: str, dir_name: str):
     if os.path.exists(output_path):
         print(f">> SKIPPING ARCH: {arch.upper()} (Output file={output_path} already exists)")
         # 运行ISADetect模型，对指定CSV文件进行预测
-        main_run(output_path, f'./output/{arch}')
+        main_run(output_path, f'./output/ARM_RealFirms/{arch}')
         print(f">> DONE! PREDICTED FILE IS SAVED TO ./output/ARM_RealFirms/{arch}/accuracy_report*")
         return
     print(">> PROCESSING ARCH: {}".format(arch.upper()))
@@ -68,14 +68,16 @@ if __name__ == '__main__':
         print("正在启动JVM...")
         jvm.start(packages=True)
         print("JVM启动成功")
-        workspace = './output/realfirms'
-        for root, _, files in os.walk(workspace):
+        for root, _, files in os.walk('./output/realfirms'):
             # 过滤出二进制文件
             binaries = [f for f in files if len(re.findall(r'\.(bin@[0-9a-fA-F]+|bin|elf)$', f)) > 0]
             if binaries:
                 # 获取上级目录路径字符串
                 up_root = os.path.split(root)[0]
-                real_firm_run(up_root, os.path.split(up_root)[1])
+                dir_name = os.path.split(up_root)[1]
+                # if dir_name == "others":
+                #     continue
+                real_firm_run(up_root, dir_name)
     except Exception as e:
         print(f"程序执行出错: {e}")
         import traceback
