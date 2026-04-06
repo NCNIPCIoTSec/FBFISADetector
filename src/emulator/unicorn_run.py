@@ -3,6 +3,7 @@
 
 import os
 import struct
+import argparse
 
 from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_MODE_THUMB, UC_MODE_LITTLE_ENDIAN
 from unicorn.unicorn_const import UC_HOOK_CODE, UC_HOOK_MEM_INVALID, UC_HOOK_INTR, UC_ERR_OK, UC_MODE_MCLASS
@@ -12,32 +13,6 @@ from unicorn.arm_const import (
     UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7,
     UC_ARM_REG_R8, UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11, UC_ARM_REG_R12,
 )
-
-# ====== 你给的参数 ======
-BIN_PATH   = "/home/yq/workspace/studies/MyProjects/FBFISADetector/output/arm/bin/p2im_gateway_0x8000000.bin"
-BASE_ADDR  = 0x08000000
-ENTRY_ADDR = 0x0800365c
-
-# ====== 你预设的入口 ======
-PRESET_ENTRY = ENTRY_ADDR  # 0x0800365c
-
-# ====== 运行控制 ======
-MAX_INSN = 50_000            # 最大执行指令数，避免卡死
-TRACE_EVERY = 1              # 每条指令都打印；嫌吵可改成 10/100
-STOP_ON_INVALID = True       # 非法内存访问时停止
-
-# ====== 内存布局（你可按固件实际改）======
-# Flash：映射 bin 的区域
-FLASH_MAP_PAD = 0x1000       # 映射向上取整用
-
-# SRAM：给一个“假 RAM”当栈/数据区（固件如果访问 0x2000_0000 会需要它）
-SRAM_BASE = 0x20000000
-SRAM_SIZE = 0x00020000       # 128KB
-STACK_TOP = SRAM_BASE + SRAM_SIZE - 0x10
-
-# 外设 MMIO：如果固件会读写外设寄存器，可以先粗暴映射一段避免立刻 crash
-MMIO_BASE = 0x40000000
-MMIO_SIZE = 0x00100000       # 1MB（演示用）
 
 
 def same_addr_ignore_thumbbit(a, b):
@@ -201,4 +176,36 @@ def main():
 
 
 if __name__ == "__main__":
+    # ====== 解析命令行参数 ======
+    praser = argparse.ArgumentParser(description="Run Unicorn Emulator")
+    praser.add_argument("-f", "--file", help="storage path of target binary file", type=str)
+    args = praser.parse_args()
+
+    # ====== 你给的参数 ======
+    BIN_PATH   = args.file
+    BASE_ADDR  = 0x08000000
+    ENTRY_ADDR = 0x0800365c
+
+    # ====== 你预设的入口 ======
+    PRESET_ENTRY = ENTRY_ADDR  # 0x0800365c
+
+    # ====== 运行控制 ======
+    MAX_INSN = 50_000            # 最大执行指令数，避免卡死
+    TRACE_EVERY = 1              # 每条指令都打印；嫌吵可改成 10/100
+    STOP_ON_INVALID = True       # 非法内存访问时停止
+
+    # ====== 内存布局（你可按固件实际改）======
+    # Flash：映射 bin 的区域
+    FLASH_MAP_PAD = 0x1000       # 映射向上取整用
+
+    # SRAM：给一个“假 RAM”当栈/数据区（固件如果访问 0x2000_0000 会需要它）
+    SRAM_BASE = 0x20000000
+    SRAM_SIZE = 0x00020000       # 128KB
+    STACK_TOP = SRAM_BASE + SRAM_SIZE - 0x10
+
+    # 外设 MMIO：如果固件会读写外设寄存器，可以先粗暴映射一段避免立刻 crash
+    MMIO_BASE = 0x40000000
+    MMIO_SIZE = 0x00100000       # 1MB（演示用）
+
+    # ====== 主函数 ======
     main()

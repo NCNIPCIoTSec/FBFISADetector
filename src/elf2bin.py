@@ -59,15 +59,15 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
     print(f"[INFO] 新建立的BIN物理起始地址为: {hex(file_start_address)}")
     # 将结果存储到目标文件夹内
     fnm_rmv_elf = os.path.split(elf_file_load_path)[-1].replace(".elf", "")
-    target_path = bin_file_store_dir + f"{fnm_rmv_elf}_{hex(file_start_address)}.bin"
+    target_path = os.path.join(bin_file_store_dir, f"{fnm_rmv_elf}_{hex(file_start_address)}.bin")
+    # 确保输出目录存在
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
     with open(file=target_path, mode='wb') as fw:
         fw.write(bin_format_content)
     print(f"[INFO] 成功！！！ ===> 处理结果已经存储到文件<{target_path}>")
 
 
-if __name__ == "__main__":
-    from fbfisa.settings import SAMPLES_DIR, OUTPUT_DIR
-    
+def multi_process():
     tricore_samples = [
         "ADC_Background_Scan_1_KIT_TC297_TFT.elf",
         "ADC_Filtering_1_KIT_TC375_LK.elf",
@@ -93,3 +93,24 @@ if __name__ == "__main__":
             if not os.path.isfile(file_name):
                 continue
             elfFile2binFile(elf_file_load_path=file_name, bin_file_store_dir=out_dir)
+
+
+if __name__ == "__main__":
+    import argparse
+    from fbfisa.settings import SAMPLES_DIR, OUTPUT_DIR
+
+    # 设置参数
+    parser = argparse.ArgumentParser(
+        prog="ELF2BIN", description="Convert ELF file to BIN file", epilog='Have Fun!!!'
+    )
+    parser.add_argument('-f', '--file', help="storage path of target binary file", type=str)
+    parser.add_argument('-o', '--output_dir', help="storage path of output directory", type=str, default=os.path.join(OUTPUT_DIR, "bin/"))
+    parser.add_argument('-m', '--multiprocessing', action="store_true", help="start multiprocessing and run multi_process function, default is False")
+    args = parser.parse_args()
+
+    # 处理文件
+    if args.multiprocessing:
+        multi_process()
+    else:
+        elfFile2binFile(elf_file_load_path=args.file, bin_file_store_dir=args.output_dir)
+

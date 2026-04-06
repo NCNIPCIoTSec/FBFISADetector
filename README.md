@@ -3,6 +3,12 @@
 **<font color="red">MAIN PURPOSE:</font>** Identify **the ISA (Instrunction Set Architecture) and Endianness** of Monolithic Firmware
 
 ## 前期配置
+**下载项目：**  
+```bash
+git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
+# git submodule update --init --recursive
+```  
+
 **下载虚拟环境：** 使用的Python的virtualenv库（[环境配置参考链接](https://blog.csdn.net/littlefun591/article/details/135740075)）  
   ```shell
   pip install virtualenv virtualenvwrapper
@@ -23,10 +29,9 @@
   workon FBFISADetector
   ```
 **下载项目并下载依赖的库**  
-  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr, capstone, pyghidra, ghidra-stubs==<your-ghidra-version>
+  - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr, capstone, pyghidra, ghidra-stubs==\<your-ghidra-version\>
   - **需要github上自行下载的有：** pypcode, python-javabridge, *capstone  
   ```bash
-  git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   cd FBFISADetector 
   pip install -r requirements.txt
   cd requirements
@@ -46,6 +51,8 @@
   # cd ..
   # git clone https://github.com/capstone-engine/capstone.git
   # cd capstone/bindings/python && python setup.py install
+  # 安装unicorn仿真器
+  cd ../unicorn/bindings/python && python setup.py install
   ```
 
 ## 运行
