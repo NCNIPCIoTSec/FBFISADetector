@@ -1,0 +1,52 @@
+{
+    "ARM": {
+        "FLASH_MAP_PAD": "0x1000", 
+        "FLASH_BASE": "0x08000000",
+        "ENTRY_ADDR": "0x08000000",
+        "SRAM_BASE": "0x20000000",
+        "SRAM_SIZE": "0x00020000",
+        "MMIO_BASE": "0x40000000",
+        "MMIO_SIZE": "0x00100000",
+        "STACK_TOP": "0x2001FFF0"
+    },
+    "POWERPC": {
+        "FLASH_MAP_PAD": "0x1000",
+        "FLASH_BASE": "0x00000000",
+        "ENTRY_ADDR": "0x00000000",
+        "SRAM_BASE": "0x20000000",
+        "SRAM_SIZE": "0x00040000",
+        "MMIO_BASE": "0xE0000000",
+        "MMIO_SIZE": "0x10000000",
+        "STACK_TOP": "0x2003FFF0"
+    },
+    "MIPS": {
+        "FLASH_MAP_PAD": "0x1000",
+        "FLASH_BASE": "0x1FC00000",
+        "ENTRY_ADDR": "0x1FC00000",
+        "SRAM_BASE": "0x80000000",
+        "SRAM_SIZE": "0x00040000",
+        "MMIO_BASE": "0x1F000000",
+        "MMIO_SIZE": "0x00800000",
+        "STACK_TOP": "0x8003FFF0"
+    },
+    "TRICORE": {
+        "FLASH_MAP_PAD": "0x1000",
+        "FLASH_BASE": "0x80000000",
+        "ENTRY_ADDR": "0x80000000",
+        "SRAM_BASE": "0xD0000000",
+        "SRAM_SIZE": "0x00040000",
+        "MMIO_BASE": "0xF0000000",
+        "MMIO_SIZE": "0x04000000",
+        "STACK_TOP": "0xD003FFF0"
+    },
+    "RISCV64": {
+        "FLASH_MAP_PAD": "0x1000",
+        "FLASH_BASE": "0x80000000",
+        "ENTRY_ADDR": "0x80000000",
+        "SRAM_BASE": "0x00000000",
+        "SRAM_SIZE": "0x00100000",
+        "MMIO_BASE": "0x40000000",
+        "MMIO_SIZE": "0x10000000",
+        "STACK_TOP": "0x000FFFF0"
+    }
+}

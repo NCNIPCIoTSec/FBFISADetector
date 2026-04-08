@@ -8,7 +8,7 @@ cd ./src/
 python elf2bin.py -f ${ARM_ELF_SAMPLE_PATH} -o ${OUTPUT_DIR}
 
 cd ./emulator/
-python unicorn_run.py -f ${ARM_BIN_SAMPLE_PATH}
+python unicorn_run.py -f ${ARM_BIN_SAMPLE_PATH} -a ARM:LE -b 0x8000000 -e 0x0800365c
 # python ghidra_emu_run.py
 
 
