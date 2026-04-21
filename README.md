@@ -150,7 +150,7 @@ $$TF(τ) = \dfrac{\text{num of times τ appeared in the document}}{\text{num of 
 ### 字节块分析过滤
 ### IR分析方法
 **注意：** 由于切块内容可能存在不完整语义，更加的办法是恢复完整的函数边界，但对于静态分析方法，这是复杂的。所以，在IR分析的声明变量未使用分析中，<font color="red">我们并未分析返回值寄存器</font>，因为可能存在函数中间RET的情况，这就导致了路径缺失从而导致一些寄存器的未使用。此外，当前的IR分析，能够大量地筛选掉一部分IR逻辑有问题的字节块，但是，仍存在15%左右的非代码区域字节块未能被筛选掉，IR逻辑正确性验证仍需增强。 -->
-详见TrustCom2025论文：[**FBFISADetector: A Method based on Filter Mechanism to detect the Instruction Set Architecture of Monolithic Firmware**]()
+详见TrustCom2025论文：[**FBFISADetector: A Method based on Filter Mechanism to detect the Instruction Set Architecture of Monolithic Firmware**](https://ieeexplore.ieee.org/document/11354569)
 
 ## 评估
 - **测试集**  
