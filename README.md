@@ -27,6 +27,7 @@ git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   # 本实验使用的Python版本为3.11.11  
   mkvirtualenv FBFISADetector --python=$(which python)
   workon FBFISADetector
+  pip install --upgrade pip
   ```
 **下载项目并下载依赖的库**  
   - **可python pip 直接下载的有：** sympy, pyelftools, numpy, matplotlib, angr, capstone, pyghidra, ghidra-stubs==\<your-ghidra-version\>
@@ -34,10 +35,8 @@ git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   ```bash
   cd FBFISADetector 
   pip install -r requirements.txt
-  cd requirements
-  cd pypcode && python setup.py install
-  cd ..
-  cd python-javabridge && pip install -e .
+  cd requirements/pypcode && python setup.py install
+  cd ../python-javabridge && pip install -e .
   cd ../ghidra/
   # 编译 ghidra
   # 请先确认java版本、Gradle版本、Python版本是否与项目要求一致
@@ -52,7 +51,7 @@ git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   # git clone https://github.com/capstone-engine/capstone.git
   # cd capstone/bindings/python && python setup.py install
   # 安装unicorn仿真器
-  cd ../unicorn/bindings/python && python setup.py install
+  cd ../unicorn/bindings/python && python setup.py install && cd ../../../../
   ```
 
 ## 运行
@@ -173,7 +172,7 @@ $$TF(τ) = \dfrac{\text{num of times τ appeared in the document}}{\text{num of 
 实验细节以及其他实验结果请参考论文。
 
 ## 局限性
-- 专家依赖：需要大量手动工作（阅读指令集架构手册以及样本检测）来寻找指令对以完成配置文件 —— 考虑更加深度地挖掘指令间关系来完成配置文件的自动生成；  
+- 专家依赖：需要大量手动工作（阅读指令集架构手册以及样本检测）来寻找指令对以完成配置文件，这也是为什么只做了5个架构的原因 —— 考虑更加深度地挖掘指令间关系来完成配置文件的自动生成；  
 - IR逻辑正确性分析：对非代码区域的字节块过滤能力仍有待提升，需要削弱对代码区域字节块的过滤能力；
 - 语义分析方法的局限性：当固件/二进制文件语义内容不丰富的情况下（即，小文件），指令对的方法可能会导致过滤掉所有的二进制块，从而导致识别准确率下降 —— 加入频率分析方法，以提高识别准确率；  
 - 指令对的平衡性无法保证：当选取的指令对特征强度较弱时，会导致分割的二进制块较少，或者过滤掉大部分有意义的二进制块；当使用的指令对较多时，方法愈发接近频率分析，反而导致因为执行效率低甚至不如频率分析方法，此外，块指令对过多会导致其他架构也能分割过多的二进制块，从而导致误识别上升（如, TriCore） —— 两种方法的结合也许效果更佳。  
