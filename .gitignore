@@ -2,6 +2,7 @@
 /.vscode
 /.idea
 /build
+/.claude
 *.egg-info
 
 /relative_works/datasets

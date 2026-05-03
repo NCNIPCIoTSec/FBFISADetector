@@ -4,6 +4,8 @@ import struct
 import pyghidra
 from pyghidra.launcher import HeadlessPyGhidraLauncher
 
+from agents.abs_agent import LLMAgent
+
 # 启动 Ghidra，启动后才可以加载 ghidra 模块
 WORKSAPCE_DIR = "/home/yq/NIPC/firmwares/identification/FBFISADetector"
 FILE_DIR = f"{WORKSAPCE_DIR}/output"
@@ -124,6 +126,8 @@ class BaseAddressAnalyzer:
         self.instr_reversed_bytes = self.data_reversed_bytes//2 if self.arch.startswith("ARM") else self.data_reversed_bytes
         self.ADDR_THRESHOLD = 0x1000  # 相差 4096 字节认为是不同的基地址
         self.FILE_SIZE = self.current_program.getMaxAddress().getUnsignedOffset()
+        # 初始化 Agent
+        self.llm_agent = LLMAgent()
         # 偏移地址
         self.string_offsets = []
         self.func_entry_points = []
@@ -132,6 +136,7 @@ class BaseAddressAnalyzer:
         self.vector_abs_addresses = {}
         self.func_abs_addresses = {}
         self.data_abs_addresses = {}
+        self.mixed_abs_addresses = {}
         # 候选基地址
         self.candidate_base_addresses = {}
 
@@ -147,16 +152,17 @@ class BaseAddressAnalyzer:
         #     cnt += 1
         #     if cnt % 10 == 0:
         #         print("\n"+"+"*50)
-        # # 按照绝对地址排序打印，打印前10个
-        # print("==== RAM操作偏移位置的4字节值 ====")
-        # cnt = 0
-        # candidates_iter = sorted(self.candidate_base_addresses.items(), key=lambda item: item[1], reverse=True)
-        # for addr, count in candidates_iter:
-        #     print(f"[count(0x{addr:x})={count}]", end=" | ")
-        #     cnt += 1
-        #     if cnt % 10 == 0:
-        #         print("\n"+"+"*50)
-        # print()
+        # 按照绝对地址排序打印，打印前10个
+        print("==== RAM操作偏移位置的4字节值 ====")
+        cnt = 0
+        candidates_iter = sorted(self.candidate_base_addresses.items(), key=lambda item: item[1], reverse=True)
+        for addr, count in candidates_iter:
+            print(f"[count(0x{addr:x})={count}]", end=" | ")
+            cnt += 1
+            if cnt % 10 == 0:
+                print("\n"+"+"*50)
+        print()
+        return candidates_iter[0][0] if candidates_iter else None
         
     # 复现并整改 FirmXray 的基地址求解算法，使其满足多架构需求
     def firmxray_algorithms(self):
@@ -164,6 +170,7 @@ class BaseAddressAnalyzer:
         for func in self.listing.getFunctions(True):
             self.search_imm(func)
         self.func_entry_points = sorted(self.func_entry_points) 
+        self.classify_absolute_addresses_by_Agent()
         
         # 约束计算1：获取各个绝对地址的推理地址范围
         base_addr_ranges = self.get_ranges()
@@ -494,11 +501,8 @@ class BaseAddressAnalyzer:
 
     def indirect_absolute_address_calc(self, offset: str, base_offset: int = 0) -> tuple[bytearray, bytearray]:
         """
-        任务1：
         从文件偏移读取 4 字节，解析为 uint32，
         最终以“大端字节序”形式返回字节数据。
-        任务2：
-        TODO: 区分是否是间接寻址
         
         :param offset: 文件偏移（0x开头字符串）
         :param base_offset: 基址偏移，可用于相对地址计算 pc+offset（默认 0）
@@ -543,14 +547,9 @@ class BaseAddressAnalyzer:
             return None
         
         # 5️⃣ FIXME: 存储，但要区分是寻（函数）地址、寻（数据）地址
-        if self.identify_absolute_address(offset=off, abs_addr=big_value):
-            if self.func_abs_addresses.get(off) is None:
-                self.func_abs_addresses[off] = None
-            self.func_abs_addresses[off] = big_value
-        else:
-            if self.data_abs_addresses.get(off) is None:
-                self.data_abs_addresses[off] = None
-            self.data_abs_addresses[off] = big_value
+        if self.mixed_abs_addresses.get(off) is None:
+            self.mixed_abs_addresses[off] = None
+        self.mixed_abs_addresses[off] = big_value
 
         # print(f"| ** INDIRECT ABS @ 0x{off:X}")
         # print(f"|    raw_bytes        : {data.hex()}")
@@ -559,15 +558,19 @@ class BaseAddressAnalyzer:
 
         return data, big_data
 
-    # TODO: 实现识别绝对地址是否是函数地址或数据地址的逻辑
-    def identify_absolute_address(self, offset: int, abs_addr: int) -> bool:
-        """
-            识别绝对地址是否是函数地址或数据地址
-            :param offset: 文件偏移（整数）
-            :param abs_addr: 绝对地址（整数）
-            :return: True 表示是函数地址 False 表示是数据地址
-        """
-        pass
+    # 需要分类时调用，结果直接写回自身属性
+    def classify_absolute_addresses_by_Agent(self):
+        func, data, unknown = self.llm_agent.classify_addresses(
+            candidates = self.mixed_abs_addresses,
+            arch       = self.arch,
+            bits_width = self.bits_width,
+            endian     = self.endian,
+            file_bytes = self.file_bytes,
+            file_size  = self.FILE_SIZE,
+        )
+        self.func_abs_addresses.update(func)
+        self.data_abs_addresses.update(data)
+        self.mixed_abs_addresses = unknown
 
     def p_codes_extend(self, des_var_name: str, pcode_ops: list) -> str:
         """
@@ -792,19 +795,20 @@ def run_ghidra_base_address_solver(bin_file: str, variant: str, ghidra_workspace
         # 基地址分析
         print("####################### 开始分析固件基地址 #######################")
         baa = BaseAddressAnalyzer(flat_api.getCurrentProgram())
-        baa.analyzing()
+        base_addr = baa.analyzing()
+        print(f"### 基地址：0x{base_addr:x}")
         del baa
         # 分析程序入口地址
-        # print("####################### 开始分析程序入口地址 #######################")
-        # pea = ProgramEPAnalyzer(flat_api.getCurrentProgram())
-        # ep = pea.analyzing()
-        # print("###"*25)
-        # print("### 成功分析程序入口地址")
-        # print(f"### 入口地址：0x{ep:x}")
-        # print(f"### 入口地址信息：{pea.all_ep_info[ep]}")
-        # print("###"*25)
-        # del pea
-        print("\n####################### 分析完成 #######################\n")
+        print("####################### 开始分析程序入口地址 #######################")
+        pea = ProgramEPAnalyzer(flat_api.getCurrentProgram())
+        ep = pea.analyzing()
+        print("###"*25)
+        print("### 成功分析程序入口地址")
+        print(f"### 入口地址：0x{ep:x}")
+        print(f"### 入口地址信息：{pea.all_ep_info[ep]}")
+        print("###"*25)
+        del pea
+        print("####################### 分析完成 #######################\n")
 
 if __name__ == "__main__":
     # 调试

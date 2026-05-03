@@ -4,6 +4,7 @@ demo*.ipynb
 test*.ipynb
 __pycache__/
 *.egg-info
+agents/auth.conf
 
 fbfisa/__pycache__/
 fbfisa/analysis/__pycache__/
@@ -11,3 +12,4 @@ fbfisa/evaluate/__pycache__/
 fbfisa/utils/__pycache__/
 fbfisa/config/__pycache__/
 fbfisa/evaluate/lab/__pycache__/
+fbfisa/agents/__pycache__/
