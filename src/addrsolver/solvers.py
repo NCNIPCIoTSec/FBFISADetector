@@ -804,15 +804,15 @@ def run_ghidra_base_address_solver(bin_file: str, variant: str, ghidra_workspace
         print("### 成功启动 Ghidra 并加载二进制文件")
         print(f"### 二进制文件路径：{bin_file}")
         print(f"### 架构变体：{variant}")
-        print("###"*25)
-        ok = disassemble_at(
-            flat_api=flat_api, 
-            start_offset=manually_disassemble[0], 
-            end_offset=manually_disassemble[1], 
-            follow_flow=True,
-            try_thumb=True if variant.upper().startswith("ARM") else False
-        )
-        print("disassemble ok:", ok)
+        if manually_disassemble != (0, 0):
+            ok = disassemble_at(
+                flat_api=flat_api, 
+                start_offset=manually_disassemble[0], 
+                end_offset=manually_disassemble[1], 
+                follow_flow=True,
+                try_thumb=True if variant.upper().startswith("ARM") else False
+            )
+            print("disassemble ok:", ok)
         print("###"*25)
         # 在这里使用 flat_api 进行操作
         # 基地址分析

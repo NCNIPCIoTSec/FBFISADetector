@@ -13,6 +13,8 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
         # 原二进制文件内容
         original_bin = fr.read()
     # 检查是否已经处理过，如果存在bin文件的其实文件名与当前elf文件的其实文件名相同，则直接返回
+    if not os.path.exists(bin_file_store_dir):
+        os.makedirs(bin_file_store_dir)
     fnm_rmv_elf = os.path.split(elf_file_load_path)[-1].replace(".elf", "")
     for file in os.listdir(bin_file_store_dir):
         if file.startswith(fnm_rmv_elf):
