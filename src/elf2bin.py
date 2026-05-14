@@ -12,6 +12,12 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
     with open(file=elf_file_load_path, mode='rb') as fr:
         # 原二进制文件内容
         original_bin = fr.read()
+    # 检查是否已经处理过，如果存在bin文件的其实文件名与当前elf文件的其实文件名相同，则直接返回
+    fnm_rmv_elf = os.path.split(elf_file_load_path)[-1].replace(".elf", "")
+    for file in os.listdir(bin_file_store_dir):
+        if file.startswith(fnm_rmv_elf):
+            print(f"[INFO] 成功！！！ ===> 文件已存在，无需处理，文件名：<{os.path.join(bin_file_store_dir, file)}>")
+            return
     # 打开 ELF 文件，并读取信息
     with open(file=elf_file_load_path, mode='rb') as f:
         try:
@@ -58,7 +64,6 @@ def elfFile2binFile(elf_file_load_path: str, bin_file_store_dir: str):
     print(f"[INFO] 新建立的BIN文件大小为: {len(bin_format_content)} Bytes")
     print(f"[INFO] 新建立的BIN物理起始地址为: {hex(file_start_address)}")
     # 将结果存储到目标文件夹内
-    fnm_rmv_elf = os.path.split(elf_file_load_path)[-1].replace(".elf", "")
     target_path = os.path.join(bin_file_store_dir, f"{fnm_rmv_elf}_{hex(file_start_address)}.bin")
     # 确保输出目录存在
     os.makedirs(os.path.dirname(target_path), exist_ok=True)

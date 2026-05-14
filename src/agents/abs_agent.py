@@ -4,6 +4,14 @@ import textwrap
 from pathlib import Path
 from openai import OpenAI
 
+'''
+auth.conf
+[llm]
+base_url = https://xxxx.com/
+api_key  = sk-xxxxx
+model    = xxxx
+api_style = chat 
+'''
 
 _AUTH_CONF = Path(__file__).parent / "auth.conf"
 _BATCH_SZ  = 30
@@ -109,6 +117,41 @@ class LLMAgent:
 
         return func_result, data_result, unknown_result
 
+    def classify_base_addresses(
+        self,
+        base_addresses : dict,      # {addr: count}
+        arch           : str,
+        bits_width     : int,
+        endian         : str
+    ) -> dict:
+        """
+        对候选基地址进行分类。
+        """
+        if not base_addresses:
+            return dict()
+        
+        final_results = dict()
+
+        items   = list(base_addresses.items())
+        batches = [items[i:i + _BATCH_SZ] for i in range(0, len(items), _BATCH_SZ)]
+
+        for idx, batch in enumerate(batches, 1):
+            print(f"[LLMAgent] 批次 {idx}/{len(batches)}，共 {len(batch)} 条...")
+            prompt  = self._build_addr_id_promt(batch, arch, bits_width, endian)
+            try:
+                raw    = self._call(prompt)
+                result = self._id_parse(raw)
+                print(f"[LLMAgent] 批次 {idx} 成功，原始响应：{raw}")
+                print(f"[LLMAgent] 批次 {idx} 解析结果：{result}")
+            except Exception as e:
+                print(f"[LLMAgent] 批次 {idx} 失败，归入 unknown：{e}")
+                continue
+
+            final_results.update(result)
+
+        return final_results
+
+
     # ────────────────────────────────────────────────────────────────────────
     #  内部方法
     # ────────────────────────────────────────────────────────────────────────
@@ -176,6 +219,31 @@ class LLMAgent:
             键为 abs_addr 原始值（含 Thumb 低位标志位）。
         """).strip()
 
+    def _build_addr_id_promt(self, base_addresses: list[tuple], arch: str, bits_width: int, endian: str) -> str:
+        base_addresses = "\n".join([f"base_address=0x{addr:08X}, occur_count={count}" for addr, count in base_addresses])
+        return textwrap.dedent(f"""
+            你是嵌入式固件逆向专家。
+            目标架构：{arch}  字宽：{bits_width}位  字节序：{endian}
+
+            任务：对以下每个通过左移操作获取的候选基地址，根据目标架构的常见基地址范围与频率进行分类，
+            判断其是「flash基地址」(flash)、「ram基地址」(ram) 、「其他基地址」(other)、「无法判断」(unknown)。
+
+            判断依据：
+            1. flash：字节符合该架构常见的程序基地址/flash地址范围
+            2. ram：字节符合该架构常见的数据基地址/ram基地址范围
+            3. other：字节不符合以上任何基地址范围，但是属于其他类别的基地址（例如，某总线控制单元基地址）
+            4. unknown：可能是纯粹的计算数据的情况
+
+            候选地址（base_address为基地址，occur_count为出现次数）：
+            {base_addresses}
+
+            严格返回如下 JSON，不要有任何额外文字或 markdown 包裹：
+            {{
+              "0xXXXXXXXX": "flash" | "ram" | "other_<category>" | "unknown"
+            }}
+            键为 base_addresses 原始值，其中<category> 为其他基地址的分类，例如 "other_sbcu"、"other_can" 等。
+        """).strip()
+
     def _call(self, prompt: str) -> str:
         style = self.cfg.get("api_style", "chat")
 
@@ -210,6 +278,26 @@ class LLMAgent:
                 addr  = int(k, 16)
                 label = str(v).lower().strip()
                 result[f"0x{addr:08X}"] = label if label in valid else "unknown"
+            except (ValueError, TypeError):
+                continue
+        return result
+    
+    def _id_parse(self, raw: str) -> dict:
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = "\n".join(
+                l for l in clean.splitlines()
+                if not l.strip().startswith("```")
+            ).strip()
+        parsed = json.loads(clean)
+        valid  = {"flash", "ram", "other", "unknown"}
+        result = {}
+        for k, v in parsed.items():
+            try:
+                addr  = int(k, 16)
+                label = str(v).lower().strip()
+                temp_label = label.split("_")[0] if label.startswith("other") else label
+                result[f"0x{addr:08X}"] = label if temp_label in valid else "unknown"
             except (ValueError, TypeError):
                 continue
         return result

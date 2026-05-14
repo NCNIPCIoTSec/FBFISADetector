@@ -1,3 +1,4 @@
+from math import e
 import re
 import os
 import struct
@@ -106,8 +107,8 @@ class ProgramEPAnalyzer:
                     "depth": self.calc_depth(f),
                     "name": f.getName()
                 }
-            print("Func_EP: 0x%X  in=%d  out=%d  depth=%d  name=%s" %
-                (ep, in_num, len(self.called_map[f]), self.calc_depth(f), f.getName()))
+            # print("Func_EP: 0x%X  in=%d  out=%d  depth=%d  name=%s" %
+            #     (ep, in_num, len(self.called_map[f]), self.calc_depth(f), f.getName()))
 
         return self.possible_ep
 
@@ -138,11 +139,27 @@ class BaseAddressAnalyzer:
         self.data_abs_addresses = {}
         self.mixed_abs_addresses = {}
         # 候选基地址
+        self.left_candidate_base_addresses = {}
         self.candidate_base_addresses = {}
 
     def analyzing(self):
         print("==== 利用 FirmXray 算法分析获取候选的基地址 ====")
         self.firmxray_algorithms()
+        # 位移值分析策略
+        # 处理位移值（里面包含了基地址）
+        if self.left_candidate_base_addresses:
+            classified_base_addresses = self.llm_agent.classify_base_addresses(self.left_candidate_base_addresses, self.arch, self.bits_width, self.endian)
+            for str_candidate, tag in list(classified_base_addresses.items()):
+                candidate = int(str_candidate, 16)
+                if candidate < 0 or candidate > 0xffffffff:
+                    continue
+                if tag == "flash":
+                    print(f"flash candidate = 0x{candidate:x}")
+                    if candidate not in self.candidate_base_addresses:
+                        self.candidate_base_addresses[candidate] = 0
+                    self.candidate_base_addresses[candidate] += self.left_candidate_base_addresses[candidate]
+                else:
+                    print(f"{tag} = 0x{candidate:x}")
         # 打印绝对地址，10个为一行
         # print("==== 绝对地址 ====")
         # cnt = 0
@@ -232,8 +249,8 @@ class BaseAddressAnalyzer:
             score = self.candidate_base_addresses[candidate]
             lower = base_addr_ranges[constraint_index-1][0]
             upper = base_addr_ranges[constraint_index-1][1]
-            print(f"High Possible Base Address: 0x{base:x}=0x{lower:x}-0x{upper:x} (Score: {score})")
-
+            # print(f"High Possible Base Address: 0x{base:x}=0x{lower:x}-0x{upper:x} (Score: {score})")
+        
     # 寻找所有的立即数：主要是间接寻址，注意区分是寻（函数）地址、寻（数据）地址
     def search_imm(self, func: Function):
         """
@@ -246,8 +263,8 @@ class BaseAddressAnalyzer:
         func_address = func.getEntryPoint()
         self.func_entry_points.append(func_address.getUnsignedOffset())
         # 迭代分析
-        print(f"==== FuncName:{func.getName()}|FuncEP:0x{func_address} ====")
-        print(f">> Address Range: [0x{min_address}, 0x{max_address}]")
+        # print(f"==== FuncName:{func.getName()}|FuncEP:0x{func_address} ====")
+        # print(f">> Address Range: [0x{min_address}, 0x{max_address}]")
         # # 按照控制流图遍历指令，采用深度优先搜索（函数则跳过，参数寄存器的数据模糊化处理）
         # self.cfg_walk(func_address)
         self.p_codes_sequence_walk(func)
@@ -298,13 +315,14 @@ class BaseAddressAnalyzer:
             for successor in reversed(successors):
                 stack.append(successor)
 
-    # FIXME: 由于无脑抓取大量的绝对地址，这导致稀释掉了很多候选基地址，需要优化；1. 尝试获取数据表的偏移地址；2. 尝试减少抓取的绝对地址数量；
+    # 由于无脑抓取大量的绝对地址，这导致稀释掉了很多候选基地址，需要优化 ==> 直接交给 LLM 筛选
     def p_codes_sequence_walk(self, func: Function):
         """
             顺序遍历函数体内的所有指令，并分析PCode内容，记录每条路径下的指令集合
         """
         register_copy_imm, register_int_add_imm = {}, {}
-        for addr in func.getBody().getAddresses(True):
+        func_addrs = [addr for addr in func.getBody().getAddresses(True)]
+        for c_index, addr in enumerate(func_addrs):
             instr = self.listing.getInstructionAt(addr)
             if instr is None:
                 continue
@@ -329,7 +347,7 @@ class BaseAddressAnalyzer:
                 match = re.findall(r"\(register, (0x[0-9a-fA-F]+), \d+\) (?:LOAD|COPY) \(ram, (0x[0-9a-fA-F]+), \d+\)", str(p_code_op))
                 if len(match) > 0:
                     # 寄存器间接寻址，找到偏移量并计算偏移位置的值
-                    print(match)
+                    # print(match)
                     reg_name, ram_imm = match[0]
                     self.indirect_absolute_address_calc(offset=ram_imm)  # 保存绝对地址
                     register_int_add_imm[reg_name] = None
@@ -343,8 +361,10 @@ class BaseAddressAnalyzer:
                     riai = unique_int_add_imm.get(unique_name, None)
                     if riai is not None:  # base_address + offset => load ram[base_address + offset]
                         # print(f"| ** Register[{reg_name}] = LOAD RAM({riai})")
-                        data, _ = self.indirect_absolute_address_calc(offset=riai)  # 保存绝对地址
-                        register_int_add_imm[reg_name] = data.hex()
+                        content = self.indirect_absolute_address_calc(offset=riai)
+                        if content is not None:
+                            data, _ = content  # 保存绝对地址
+                            register_int_add_imm[reg_name] = data.hex()
                     continue
                 
                 # ============================================ 【COPY 操作】处理一些计算相关操作 ============================================
@@ -389,6 +409,7 @@ class BaseAddressAnalyzer:
                         else:
                             unique_int_add_imm[unique_name[0]] = temp_const
                     continue
+
                 # ============================================ 基地址候选（含段基址，需要筛选） ============================================
                 # INT_LEFT 操作；左移x位，计算地址的可能性较高（EA = BA + offset）
                 match = re.findall(r"INT_LEFT \((?:register|unique|const), 0x[0-9a-fA-F]+, \d+\) , \(const, 0x[0-9a-fA-F]+, \d+\)", str(p_code_op))
@@ -403,10 +424,11 @@ class BaseAddressAnalyzer:
                         left_shift_addr = re.findall(r"\(const, (0x[0-9a-fA-F]+), \d+\)", left_shift_pcode)[0]
                         # possible address
                         pos_address = int(left_shift_addr, 16)
-                        if self.candidate_base_addresses.get(pos_address) is None:
-                            self.candidate_base_addresses[pos_address] = 0
-                        self.candidate_base_addresses[pos_address] += 1
+                        if self.left_candidate_base_addresses.get(pos_address) is None:
+                            self.left_candidate_base_addresses[pos_address] = 0
+                        self.left_candidate_base_addresses[pos_address] += 1
                     continue
+
                 # ============================================ 寄存器值被覆盖 ============================================
                 # 变量值被覆盖，清空记录
                 reg_int_match = re.findall(rf"\(register, (0x[0-9a-fA-F]+), \d+\) [A-Z_]+ ", str(p_code_op))
@@ -791,15 +813,21 @@ def run_ghidra_base_address_solver(bin_file: str, variant: str, ghidra_workspace
             try_thumb=True if variant.upper().startswith("ARM") else False
         )
         print("disassemble ok:", ok)
+        print("###"*25)
         # 在这里使用 flat_api 进行操作
         # 基地址分析
-        print("####################### 开始分析固件基地址 #######################")
+        print("\n[开始分析固件基地址]")
         baa = BaseAddressAnalyzer(flat_api.getCurrentProgram())
         base_addr = baa.analyzing()
-        print(f"### 基地址：0x{base_addr:x}")
+        print("###"*25)
+        if base_addr is None:
+            print("[-] 无法分析固件基地址")
+        else:
+            print(f"### 基地址：0x{base_addr:x}")
+        print("###"*25)
         del baa
         # 分析程序入口地址
-        print("####################### 开始分析程序入口地址 #######################")
+        print("\n[开始分析程序入口地址]")
         pea = ProgramEPAnalyzer(flat_api.getCurrentProgram())
         ep = pea.analyzing()
         print("###"*25)
@@ -808,22 +836,30 @@ def run_ghidra_base_address_solver(bin_file: str, variant: str, ghidra_workspace
         print(f"### 入口地址信息：{pea.all_ep_info[ep]}")
         print("###"*25)
         del pea
-        print("####################### 分析完成 #######################\n")
+        print("[分析完成]\n")
 
 if __name__ == "__main__":
     # 调试
-    samples = [
-        (f"{FILE_DIR}/arm/bin/p2im_gateway_0x8000000.bin", "ARM:LE:32:Cortex", 4, (0x365c, 0x368f)),
-        # (f"{FILE_DIR}/powerpc/bin/0a2818b49cc0d364dc897328cc0d6e38_0x0.bin", "PowerPC:BE:32:default", 4, (0x0, 0x0)),
-        # (f"{FILE_DIR}/mips/bin/0a890b8cfbfc4ec85d27cdb84e1924c5_0x0.bin", "MIPS:BE:32:default", 4, (0x0, 0x0)),
-        # (f"{FILE_DIR}/tricore/bin/ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x60000000.bin", "tricore:LE:32:default", 4, (0x0, 0x0)),
-    ]
-    for s, v, r, m in samples:
-        run_ghidra_base_address_solver(
-            bin_file=s, 
-            variant=v, 
-            reversed_bytes=r, 
-            manually_disassemble=m,
-            ghidra_workspace_dir=TEMP_GHIDRA_DIR
-        )
+    # samples = [
+    #     (f"{FILE_DIR}/arm/bin/p2im_gateway_0x8000000.bin", "ARM:LE:32:Cortex", 4, (0x365c, 0x368f)),
+    #     (f"{FILE_DIR}/powerpc/bin/0a2818b49cc0d364dc897328cc0d6e38_0x0.bin", "PowerPC:BE:32:default", 4, (0x0, 0x0)),
+    #     (f"{FILE_DIR}/mips/bin/0a890b8cfbfc4ec85d27cdb84e1924c5_0x0.bin", "MIPS:BE:32:default", 4, (0x0, 0x0)),
+    #     (f"{FILE_DIR}/tricore/bin/ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x60000000.bin", "tricore:LE:32:default", 4, (0x0, 0x0)),
+    # ]
+
+    import argparse
+    parser = argparse.ArgumentParser(description="Run Ghidra base address solver")
+    parser.add_argument("--bin_file", "-b", type=str, required=True, help="Path to the binary file")
+    parser.add_argument("--variant", "-v", type=str, required=True, help="Architecture variant")
+    parser.add_argument("--reversed_bytes", "-r", type=int, default=4, help="Number of reversed bytes")
+    parser.add_argument("--manually_disassemble", "-m", type=str, default="(0, 0)", help="Manually disassemble range (start, end)")
+    args = parser.parse_args()
+
+    run_ghidra_base_address_solver(
+        bin_file=args.bin_file, 
+        variant=args.variant, 
+        reversed_bytes=args.reversed_bytes, 
+        manually_disassemble=eval(args.manually_disassemble),
+        ghidra_workspace_dir=TEMP_GHIDRA_DIR
+    )
 

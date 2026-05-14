@@ -18,3 +18,5 @@
 /output/riscv64
 /output/tricore
 /output/x86
+
+**/*.log
