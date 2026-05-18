@@ -338,8 +338,10 @@ class BlocksFilter:
     def sub_ir_processing(blk_tag: int, block: BinaryBlock) -> tuple[int, bool]:
         return blk_tag, block.isPCodeIRValid()
     
-    def filterBlocksByInnerPairs(self) -> list[int]:
-        self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
+    def filterBlocksByInnerPairs(self, whether_filter: bool = True) -> list[int]:
+        self.have_pairs_blocks = [i for i in range(len(self.blocks))]
+        if whether_filter:
+            self.have_pairs_blocks = [i for i, block in enumerate(self.blocks) if len(block.getInnerBlockPairs()) > 0]
         return self.have_pairs_blocks
     
     def filterBlocksByHeadTailCheck(self, open_multi_processing: bool = False, display_error: bool = False) -> list[int]:
@@ -422,6 +424,7 @@ class BlocksFilter:
 
 
 class BinaryAnalyzer:
+    open_inner_block_filter = True
     open_multi_process = False
     supported_arch = dict()
     branch_calc_info = dict()
@@ -449,6 +452,14 @@ class BinaryAnalyzer:
     @classmethod
     def closeMultiProcessing(cls):
         cls.open_multi_process = False
+
+    @classmethod
+    def openInnerBlockFilter(cls):
+        cls.open_inner_block_filter = True
+    
+    @classmethod
+    def closeInnerBlockFilter(cls):
+        cls.open_inner_block_filter = False
     
     def __init__(self, bin_file_path: str, display: bool = False):
         # 读取二进制文件内容
@@ -542,7 +553,7 @@ class BinaryAnalyzer:
         blk_filter = BlocksFilter(blocks=blocks)
         del blocks
         # 过滤
-        blk_filter.filterBlocksByInnerPairs()
+        blk_filter.filterBlocksByInnerPairs(whether_filter=self.open_inner_block_filter)
         blk_filter.filterBlocksByHeadTailCheck(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # 开启多进程
         blk_filter.filterBlocksByIRLogic(open_multi_processing=self.open_multi_process, display_error=display_block_info)  # IR分析
         # 记录当前架构的可能变体

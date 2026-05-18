@@ -70,7 +70,6 @@ pyformlang==1.0.11
 pyghidra==3.0.2
 Pygments==2.19.2
 pyparsing==3.2.3
-pypcode==3.3.3
 python-dateutil==2.9.0.post0
 pyvex==9.2.165
 pyzmq==27.0.0

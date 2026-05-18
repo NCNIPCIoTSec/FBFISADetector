@@ -35,6 +35,7 @@ git clone --recursive https://github.com/NCNIPCIoTSec/FBFISADetector.git
   ```bash
   cd FBFISADetector 
   pip install -r requirements.txt
+  # pypcode                 3.2.2.dev0
   cd requirements/pypcode && python setup.py install
   cd ../python-javabridge && pip install -e .
   cd ../ghidra/
