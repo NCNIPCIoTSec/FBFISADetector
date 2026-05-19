@@ -104,46 +104,44 @@ if __name__ == "__main__":
     BinaryAnalyzer.updateSupportedArch(supported_arch_info=ARCH_INFO)
     BinaryAnalyzer.loadBrachCalculationExpressions(branch_calc_info_path=os.path.join(CONFIG_DIR, "call_branch.json"))
     
-    sample_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/output/arm/FreeRTOS_ThreadCreation_0x8000000.bin'
-    elf_path = '/home/yq/workspace/studies/MyProjects/FirmISAIdentify/resources/samples/arm/FreeRTOS_ThreadCreation.elf'
     print(" =>=>=> Analysis ARM Firmware <=<=<= ")
     accuracy_lab(
         samples_dir='../output/arm/bin', 
         arch='ARM:LE',
         record_fpath='../output/arm-cortex-m_no_inner_block_filter_accuracy_records.json'
     )
-    # print(" =>=>=> Analysis ARMHF-ELF <=<=<= ")
-    # accuracy_lab(
-    #     samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/armhf', 
-    #     arch='ARM:LE',
-    #     record_fpath='../output/armhf_accuracy_records.json',
-    #     files_type='elf'
-    # )
-    # print(" =>=>=> Analysis RISCV64-ELF <=<=<= ")
-    # accuracy_lab(
-    #     samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/riscv64', 
-    #     arch='RISCV64:LE',
-    #     record_fpath='../output/riscv64_accuracy_records.json',
-    #     files_type='elf'
-    # )
-    # print(" =>=>=> Analysis MIPS-ELF <=<=<= ")
-    # accuracy_lab(
-    #     samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/mips', 
-    #     arch='MIPS:BE',
-    #     record_fpath='../output/mips_accuracy_records.json',
-    #     files_type='elf'
-    # )
-    # print(" =>=>=> Analysis PowerPC-ELF <=<=<= ")
-    # accuracy_lab(
-    #     samples_dir='../relative_works/workspace/ISADetect/new_new_dataset/ISAdetect_full_binaries/powerpc', 
-    #     arch='PowerPC:BE',
-    #     record_fpath='../output/powerpc_accuracy_records.json',
-    #     files_type='elf'
-    # )
-    # print(" =>=>=> Analysis TriCore-ELF <=<=<= ")
-    # accuracy_lab(
-    #     samples_dir='../resources/samples/tricore', 
-    #     arch='tricore:LE',
-    #     record_fpath='../output/tricore_accuracy_records.json',
-    #     files_type='elf'
-    # )
+    print(" =>=>=> Analysis ARMHF-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../resources/data/firmwares/isadetect/armhf', 
+        arch='ARM:LE',
+        record_fpath='../output/armhf_no_inner_block_filter_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis RISCV64-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../resources/data/firmwares/isadetect/riscv64', 
+        arch='RISCV64:LE',
+        record_fpath='../output/riscv64_no_inner_block_filter_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis MIPS-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../resources/data/firmwares/isadetect/mips', 
+        arch='MIPS:BE',
+        record_fpath='../output/mips_no_inner_block_filter_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis PowerPC-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../resources/data/firmwares/isadetect/powerpc', 
+        arch='PowerPC:BE',
+        record_fpath='../output/powerpc_no_inner_block_filter_accuracy_records.json',
+        files_type='elf'
+    )
+    print(" =>=>=> Analysis TriCore-ELF <=<=<= ")
+    accuracy_lab(
+        samples_dir='../resources/data/firmwares/AurixIDE/Aurix_TriCore', 
+        arch='tricore:LE',
+        record_fpath='../output/tricore_no_inner_block_filter_accuracy_records.json',
+        files_type='elf'
+    )
