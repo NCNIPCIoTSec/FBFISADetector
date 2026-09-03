@@ -1,0 +1,7 @@
+interface:
+  display_name: "Firmware ISA Detector"
+  short_description: "Identify firmware ISA, endian and variant"
+  default_prompt: "Use $isa-detector to identify this firmware's ISA, endianness, variant and file type with evidence."
+
+policy:
+  allow_implicit_invocation: true
