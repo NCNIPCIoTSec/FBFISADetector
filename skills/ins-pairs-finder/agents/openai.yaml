@@ -1,7 +1,0 @@
-interface:
-  display_name: "Instruction Pair Finder"
-  short_description: "Extract and verify firmware instruction pairs"
-  default_prompt: "Use $ins-pairs-finder to extract and validate instruction pairs from this firmware binary."
-
-policy:
-  allow_implicit_invocation: true
