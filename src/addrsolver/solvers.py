@@ -1,28 +1,28 @@
-from math import e
-import re
+"""Ghidra-based firmware base-address and entry-offset inference."""
+from __future__ import annotations
+
+import argparse
+import ast
 import os
-import struct
-import pyghidra
-from pyghidra.launcher import HeadlessPyGhidraLauncher
+from pathlib import Path
+import re
+import tempfile
 
 from agents.abs_agent import LLMAgent
+from addrsolver.ghidra import find_ghidra
 
-# 启动 Ghidra，启动后才可以加载 ghidra 模块
-WORKSAPCE_DIR = "/home/yq/NIPC/firmwares/identification/FBFISADetector"
-FILE_DIR = f"{WORKSAPCE_DIR}/output"
-TEMP_GHIDRA_DIR = f"{WORKSAPCE_DIR}/temp/ghidra_workspace"
-launcher = HeadlessPyGhidraLauncher(verbose=True, install_dir=f"{WORKSAPCE_DIR}/requirements/ghidra")
-launcher.java_home = "/home/yq/workspace/tools/compilers/jdk-21.0.10+7"
-launcher.start()
-pyghidra._launcher = launcher
-from ghidra.util.task import TaskMonitor
-from ghidra.pcodeCPort.opcodes import OpCode
-from ghidra.program.model.lang import LanguageID
-from ghidra.program.flatapi import FlatProgramAPI
-from ghidra.program.model.block import BasicBlockModel
-from ghidra.app.cmd.disassemble import DisassembleCommand
-from ghidra.program.model.listing import Program, Function
-from ghidra.program.model.address import Address, AddressSet
+
+def start_ghidra(install_dir=None):
+    """Start Java on demand, honoring JAVA_HOME and GHIDRA_INSTALL_DIR."""
+    import pyghidra
+
+    pyghidra.start(install_dir=find_ghidra(install_dir))
+    # Java imports become available only after startup.
+    global TaskMonitor, BasicBlockModel, DisassembleCommand, AddressSet
+    from ghidra.util.task import TaskMonitor
+    from ghidra.program.model.block import BasicBlockModel
+    from ghidra.app.cmd.disassemble import DisassembleCommand
+    from ghidra.program.model.address import AddressSet
 
 
 # 程序入口地址分析器
@@ -87,7 +87,7 @@ class ProgramEPAnalyzer:
                         continue
                     to_addr = r.getToAddress()
                     callee = fm.getFunctionAt(to_addr)
-                    if callee is None:
+                    if callee not in self.calling_map:
                         # 有时 call 到 thunk / 外部符号 / 未识别函数
                         continue
                     self.called_map[caller].add(callee)
@@ -115,20 +115,23 @@ class ProgramEPAnalyzer:
 
 # 基地址分析器
 class BaseAddressAnalyzer:
-    def __init__(self, current_program: Program):
+    def __init__(self, current_program: Program, llm_agent=None, reversed_bytes=None):
         self.current_program = current_program
         self.listing = self.current_program.getListing()
         self.memory = self.current_program.getMemory()
-        self.arch = str(self.current_program.getLanguage())
-        self.bits_width = int(self.arch.split("/")[2])
+        self.arch = str(self.current_program.getLanguage().getLanguageID())
+        self.bits_width = self.current_program.getDefaultPointerSize() * 8
         self.endian = "BE" if current_program.getLanguage().isBigEndian() else "LE"
-        self.file_bytes = self.memory.getAllFileBytes()[0]
-        self.data_reversed_bytes = self.bits_width//8
+        file_bytes = list(self.memory.getAllFileBytes())
+        if not file_bytes:
+            raise ValueError("Ghidra did not import any file bytes")
+        self.file_bytes = file_bytes[0]
+        self.data_reversed_bytes = reversed_bytes or self.bits_width // 8
         self.instr_reversed_bytes = self.data_reversed_bytes//2 if self.arch.startswith("ARM") else self.data_reversed_bytes
         self.ADDR_THRESHOLD = 0x1000  # 相差 4096 字节认为是不同的基地址
-        self.FILE_SIZE = self.current_program.getMaxAddress().getUnsignedOffset()
+        self.FILE_SIZE = int(self.file_bytes.getSize())
         # 初始化 Agent
-        self.llm_agent = LLMAgent()
+        self.llm_agent = llm_agent
         # 偏移地址
         self.string_offsets = []
         self.func_entry_points = []
@@ -147,11 +150,11 @@ class BaseAddressAnalyzer:
         self.firmxray_algorithms()
         # 位移值分析策略
         # 处理位移值（里面包含了基地址）
-        if self.left_candidate_base_addresses:
+        if self.left_candidate_base_addresses and self.llm_agent is not None:
             classified_base_addresses = self.llm_agent.classify_base_addresses(self.left_candidate_base_addresses, self.arch, self.bits_width, self.endian)
             for str_candidate, tag in list(classified_base_addresses.items()):
                 candidate = int(str_candidate, 16)
-                if candidate < 0 or candidate > 0xffffffff:
+                if candidate not in self.left_candidate_base_addresses:
                     continue
                 if tag == "flash":
                     print(f"flash candidate = 0x{candidate:x}")
@@ -172,21 +175,38 @@ class BaseAddressAnalyzer:
         # 按照绝对地址排序打印，打印前10个
         print("==== RAM操作偏移位置的4字节值 ====")
         cnt = 0
-        candidates_iter = sorted(self.candidate_base_addresses.items(), key=lambda item: item[1], reverse=True)
-        for addr, count in candidates_iter:
+        # Prefer page alignment only when independent evidence gives equal scores.
+        # Keep the ordering deterministic instead of relying on set iteration.
+        def rank(item):
+            base, score = item
+            alignment = min(base & -base, 0x1000) if base else 0x1000
+            return score, alignment
+
+        candidates_iter = sorted(self.candidate_base_addresses.items(),
+                                 key=lambda item: (*rank(item), -item[0]), reverse=True)
+        for addr, count in candidates_iter[:20]:
             print(f"[count(0x{addr:x})={count}]", end=" | ")
             cnt += 1
             if cnt % 10 == 0:
                 print("\n"+"+"*50)
         print()
-        return candidates_iter[0][0] if candidates_iter else None
+        if len(candidates_iter) > 20:
+            print(f"Showing 20 of {len(candidates_iter)} candidate base addresses")
+        if not candidates_iter:
+            return None
+        if len(candidates_iter) > 1 and rank(candidates_iter[0]) == rank(candidates_iter[1]):
+            print("Ambiguous base address: equally supported candidates remain")
+            return None
+        return candidates_iter[0][0]
         
     # 复现并整改 FirmXray 的基地址求解算法，使其满足多架构需求
     def firmxray_algorithms(self):
         # 获取函数入口点，分析含地址操作相关的指令
         for func in self.listing.getFunctions(True):
             self.search_imm(func)
-        self.func_entry_points = sorted(self.func_entry_points) 
+        self.func_entry_points = sorted(set(self.func_entry_points))
+        self.branch_offsets = self.func_entry_points
+        self.record_possible_vectors()
         self.classify_absolute_addresses_by_Agent()
         
         # 约束计算1：获取各个绝对地址的推理地址范围
@@ -196,7 +216,7 @@ class BaseAddressAnalyzer:
         for abs_int in set(self.func_abs_addresses.values()):
             if abs_int > 0xffffffff:
                 continue
-            if abs_int % 2:
+            if self.arch.startswith("ARM") and abs_int % 2:
                 abs_int -= 1
             for func_offset in self.func_entry_points:
                 candidate = abs_int - func_offset
@@ -212,7 +232,7 @@ class BaseAddressAnalyzer:
         for abs_int in set(self.data_abs_addresses.values()):
             if abs_int > 0xffffffff:
                 continue
-            if abs_int % 2:
+            if self.arch.startswith("ARM") and abs_int % 2:
                 abs_int -= 1
             for string_offset in self.string_offsets:
                 candidate = abs_int - string_offset
@@ -224,12 +244,19 @@ class BaseAddressAnalyzer:
                 # print(f"TraceCandidateAddr: 0x{candidate:x}=0x{abs_int:x}-0x{string_offset:x}")
 
         # 约束计算4：向量表约束
-        self.record_possible_vectors()
         for vector in set(self.vector_abs_addresses.values()):
-            for branch_offset in self.branch_offsets:
+            cortex_vectors = getattr(self, "cortex_vector_addresses", {})
+            offsets = self.cortex_function_offsets if vector in cortex_vectors.values() else self.branch_offsets
+            for branch_offset in offsets:
                 candidate = vector - branch_offset
                 if candidate < 0 or candidate > 0xffffffff:
                     continue
+                if vector in cortex_vectors.values():
+                    # VTOR requires at least 128-byte alignment, and every
+                    # vector must point inside the same imported flash image.
+                    if candidate % 128 or any(not 0 <= target - candidate < self.FILE_SIZE
+                                             for target in cortex_vectors.values()):
+                        continue
                 if self.candidate_base_addresses.get(candidate) is None:
                     self.candidate_base_addresses[candidate] = 0
                 self.candidate_base_addresses[candidate] += 1
@@ -242,13 +269,12 @@ class BaseAddressAnalyzer:
                 self.candidate_base_addresses.pop(candidate)
                 continue
             constraint_index = self.check_constraints(candidate, base_addr_ranges)
-            if constraint_index == 0:
+            if base_addr_ranges and constraint_index == 0:
                 self.candidate_base_addresses.pop(candidate)
                 continue
             base = candidate
             score = self.candidate_base_addresses[candidate]
-            lower = base_addr_ranges[constraint_index-1][0]
-            upper = base_addr_ranges[constraint_index-1][1]
+            lower, upper = base_addr_ranges[constraint_index-1] if base_addr_ranges else (0, 0xffffffff)
             # print(f"High Possible Base Address: 0x{base:x}=0x{lower:x}-0x{upper:x} (Score: {score})")
         
     # 寻找所有的立即数：主要是间接寻址，注意区分是寻（函数）地址、寻（数据）地址
@@ -337,8 +363,12 @@ class BaseAddressAnalyzer:
                 if len(jump_match) > 0:
                     # 如果含有ram，则记录到向量表
                     ram_match = re.findall(r"\(ram, (0x[0-9a-fA-F]+), \d+\)", str(p_code_op))
-                    if len(ram_match) > 0:
-                        self.vector_abs_addresses[addr.getUnsignedOffset()] = int(ram_match[0], 16)
+                    if ram_match:
+                        target = int(ram_match[0], 16)
+                        # In-image branch targets are offsets after importing at
+                        # zero. Counting them as absolute pointers favors base 0.
+                        if target >= self.FILE_SIZE:
+                            self.vector_abs_addresses[addr.getUnsignedOffset()] = target
                     # 清空寄存器立即数，因为跳转指令会导致寄存器立即数的计算结果无效
                     register_copy_imm, register_int_add_imm = {}, {}
                     continue
@@ -363,8 +393,8 @@ class BaseAddressAnalyzer:
                         # print(f"| ** Register[{reg_name}] = LOAD RAM({riai})")
                         content = self.indirect_absolute_address_calc(offset=riai)
                         if content is not None:
-                            data, _ = content  # 保存绝对地址
-                            register_int_add_imm[reg_name] = data.hex()
+                            _, big_data = content
+                            register_int_add_imm[reg_name] = big_data.hex()
                     continue
                 
                 # ============================================ 【COPY 操作】处理一些计算相关操作 ============================================
@@ -418,7 +448,7 @@ class BaseAddressAnalyzer:
                     des_var_name = des_var_name.strip()
                     if len(op_list) > 1:
                         p_code_op = self.p_codes_extend(des_var_name, op_list)
-                    if len(re.findall(des_var_name, str(p_code_op))) < 2 and len(re.findall(r"\((?:register|unique), 0x[0-9a-fA-F]+, \d+\)", str(p_code_op).replace(des_var_name, ""))) == 0:
+                    if len(re.findall(re.escape(des_var_name), str(p_code_op))) < 2 and len(re.findall(r"\((?:register|unique), 0x[0-9a-fA-F]+, \d+\)", str(p_code_op).replace(des_var_name, ""))) == 0:
                         left_shift_pcode = self.p_code_left_int_simplify(str(p_code_op))
                         # print("| ** INT-LEFT IMM:", left_shift_pcode)
                         left_shift_addr = re.findall(r"\(const, (0x[0-9a-fA-F]+), \d+\)", left_shift_pcode)[0]
@@ -444,21 +474,18 @@ class BaseAddressAnalyzer:
         """
             获取各个向量进行推理的上下界范围
         """
-        boundaries = []
-        low = high = 0
-        
-        ram_pointer_sorted = sorted(self.func_abs_addresses.values())
-        for i in range(len(ram_pointer_sorted)-1):
-            diff = ram_pointer_sorted[i+1] - ram_pointer_sorted[i]
-            if diff > self.ADDR_THRESHOLD:  # 抗数据段干扰
-                low = ram_pointer_sorted[i] - self.FILE_SIZE
-                if low < 0:
-                    low = 0
-                if ( -1 < high < 0xffffffff and -1 < low < 0xffffffff ):
-                    boundaries.append((low, high))
-                high = ram_pointer_sorted[i+1]
-        
-        return boundaries
+        pointers = sorted(set(self.func_abs_addresses.values()))
+        if not pointers:
+            return []
+        clusters = [[pointers[0]]]
+        for pointer in pointers[1:]:
+            if pointer - clusters[-1][-1] > self.ADDR_THRESHOLD:
+                clusters.append([])
+            clusters[-1].append(pointer)
+        # For each pointer p into an N-byte image, base is in [p-N+1, p].
+        return [(max(0, group[-1] - self.FILE_SIZE + 1), group[0])
+                for group in clusters
+                if max(0, group[-1] - self.FILE_SIZE + 1) <= group[0]]
 
     def check_constraints(self, candidate: int, boundaries: list[tuple]):
         """
@@ -478,48 +505,48 @@ class BaseAddressAnalyzer:
         self.string_offsets = [data.getAddress().getUnsignedOffset() for data in self.listing.getDefinedData(True) if str(data.getDataType()) == "string"]
 
     def record_possible_vectors(self):
-        """
-        记录向量表内的多个4字节值
-        """
-        def get_neararest_func_offset(vt_offset):
-            """
-            获取最近的函数入口点偏移量
-            """
-            last_ep = 0
-            for ep in self.func_entry_points:
-                if last_ep <= vt_offset < ep:
-                    return ep
-            return self.FILE_SIZE
+        """Read a Cortex-M table without interpreting subsequent code as vectors."""
+        self.cortex_vector_addresses = {}
+        self.cortex_function_offsets = set(self.func_entry_points)
+        if (not self.arch.startswith("ARM") or "Cortex" not in self.arch
+                or self.data_reversed_bytes != 4 or self.FILE_SIZE < 8):
+            return
+        order = "little" if self.endian == "LE" else "big"
 
-        vector_table_offset = 0x0
-        if self.arch.startswith("ARM"):
-            vector_table_offset = 0x00000000
+        def word(offset):
+            raw = bytes(self.file_bytes.getOriginalByte(offset + i) & 0xff for i in range(4))
+            return int.from_bytes(raw, order)
 
-        # 从地址 vector_table_offset 开始读取 4 字节，直到 4字节内容 为 0x00000000 或者 0xffffffff 亦或者落入最近的函数内
-        near_func_offset = get_neararest_func_offset(vector_table_offset)
-        while vector_table_offset < near_func_offset:
-            # 获取字节内容
-            vector = bytearray()
-            try:
-                for i in range(self.data_reversed_bytes):
-                    vector.append(self.file_bytes.getOriginalByte(vector_table_offset + i) & 0xFF)
-            except Exception as e:
-                print(f"| Error: read failed @ 0x{vector_table_offset:X}: {e}")
-                vector_table_offset += self.data_reversed_bytes
+        stack, reset = word(0), word(4)
+        # SRAM/TCM stack, 8-byte alignment, and a Thumb reset pointer distinguish
+        # a vector table from arbitrary ARM code or a literal pool.
+        if not (0x10000000 <= stack < 0x40000000 and stack % 8 == 0
+                and reset & 1 and reset != 0xffffffff):
+            return
+        stop = min(self.FILE_SIZE, 0x1000,
+                   next((ep for ep in self.func_entry_points if ep > 0), self.FILE_SIZE))
+        for offset in range(4, stop - 3, 4):
+            pointer = word(offset)
+            if pointer == 0:  # Reserved vector slots.
                 continue
-            # 将vector字节解析为整数
-            if self.endian == "LE":
-                vector = int.from_bytes(vector, byteorder="little")
-            else:
-                vector = int.from_bytes(vector, byteorder="big", signed=False)
-            # 边界条件
-            if vector == 0x00000000 or vector == 0xffffffff:
+            if not pointer & 1 or abs((pointer & ~1) - (reset & ~1)) >= self.FILE_SIZE:
                 break
-            if self.vector_abs_addresses.get(vector_table_offset) is None:
-                self.vector_abs_addresses[vector_table_offset] = None
-            self.vector_abs_addresses[vector_table_offset] = vector
-            print(f"offset: {vector_table_offset:x}, vector: {vector:x}")
-            vector_table_offset += self.data_reversed_bytes
+            self.cortex_vector_addresses[offset] = pointer & ~1
+        self.vector_abs_addresses.update(self.cortex_vector_addresses)
+        if not self.cortex_vector_addresses:
+            return
+
+        # Importing at zero leaves interrupt handlers without references until
+        # the base is known. Include Thumb PUSH {...,lr} and self-loop handlers
+        # as potential entries even when Ghidra has not yet made functions.
+        raw = bytes(self.file_bytes.getOriginalByte(i) & 0xff for i in range(self.FILE_SIZE))
+        for offset in range(0, len(raw) - 1, 2):
+            halfword = int.from_bytes(raw[offset:offset + 2], order)
+            if halfword & 0xff00 == 0xb500 or halfword == 0xe7fe:
+                self.cortex_function_offsets.add(offset)
+            elif (halfword == 0xe92d and offset + 4 <= len(raw)
+                  and int.from_bytes(raw[offset + 2:offset + 4], order) & 0x4000):
+                self.cortex_function_offsets.add(offset)
 
     def indirect_absolute_address_calc(self, offset: str, base_offset: int = 0) -> tuple[bytearray, bytearray]:
         """
@@ -540,14 +567,13 @@ class BaseAddressAnalyzer:
             print(f"| Error: invalid offset '{offset}': {e}")
             return None
 
-        if off < 0:
-            print(f"| Error: offset is negative")
+        if off < 0 or off + self.data_reversed_bytes > self.FILE_SIZE:
             return None
 
         # 2️⃣ 读取文件 4 字节
         data = bytearray()
         try:
-            for i in range(4):
+            for i in range(self.data_reversed_bytes):
                 data.append(self.file_bytes.getOriginalByte(off + i) & 0xFF)
         except Exception as e:
             print(f"| Error: read failed @ 0x{off:X}: {e}")
@@ -557,15 +583,15 @@ class BaseAddressAnalyzer:
         big_data = data.copy()
         reversed_bytes = self.data_reversed_bytes
         if self.endian == "LE" and reversed_bytes and reversed_bytes > 1:
-            if 4 % reversed_bytes == 0:
-                chunks = [big_data[i:i+reversed_bytes] for i in range(0, 4, reversed_bytes)]
+            if len(data) % reversed_bytes == 0:
+                chunks = [big_data[i:i+reversed_bytes] for i in range(0, len(data), reversed_bytes)]
                 big_data = bytearray(b for chunk in chunks for b in reversed(chunk))
             else:
                 print(f"| Warn: reversed_bytes={reversed_bytes} invalid for 4-byte value")
         
         # 4️⃣ 检查值是否有效
         big_value = int.from_bytes(big_data, byteorder="big", signed=False)
-        if big_value >= 0xF0000000:
+        if big_value in (0, (1 << (8 * len(data))) - 1):
             return None
         
         # 5️⃣ FIXME: 存储，但要区分是寻（函数）地址、寻（数据）地址
@@ -582,6 +608,8 @@ class BaseAddressAnalyzer:
 
     # 需要分类时调用，结果直接写回自身属性
     def classify_absolute_addresses_by_Agent(self):
+        if self.llm_agent is None:
+            return
         func, data, unknown = self.llm_agent.classify_addresses(
             candidates = self.mixed_abs_addresses,
             arch       = self.arch,
@@ -619,7 +647,7 @@ class BaseAddressAnalyzer:
             else:  # 其他非赋值操作，pass
                 continue
             # 指令扩展
-            exp = pcode[len(var_name):]
+            exp = pcode[len(var_name):].strip()
             if exp.startswith("COPY"):  # 赋值
                 new_var = exp.replace("COPY", "").strip()
                 vars_storage[var_name] = replace_var(new_var)
@@ -632,7 +660,7 @@ class BaseAddressAnalyzer:
                     exp = exp.replace(cur_var, rep_var).strip()
                 vars_storage[var_name] = f"({exp})"
         
-        return des_var_name + " = " + vars_storage.get(des_var_name)
+        return des_var_name + " = " + vars_storage.get(des_var_name, des_var_name)
 
     def p_code_left_int_simplify(self, input_str: str) -> str:
         """
@@ -747,17 +775,21 @@ def disassemble_at(
 
     # ── 3. Peek at raw bytes (diagnostic) ─────────────────────────────────────
     try:
-        preview = bytearray(16)
+        from jpype import JArray, JByte
+        preview = JArray(JByte)(16)
         n_read  = mem.getBytes(start, preview)
         print(f"[*] Raw bytes at {start} ({n_read} bytes read): "
-              f"{preview[:n_read].hex(' ')}")
+              f"{bytes(preview[:n_read]).hex(' ')}")
     except Exception as e:
         print(f"[-] Cannot read bytes at {start}: {e}")
         return False
 
     # ── 4. Build address range ─────────────────────────────────────────────────
     if end_offset is not None:
-        end      = flat_api.toAddr(end_offset)
+        end_addresses = mem.locateAddressesForFileOffset(end_offset)
+        if not end_addresses:
+            raise ValueError(f"End offset is outside the image: {end_offset:#x}")
+        end = end_addresses[0]
         restrict = AddressSet(start, end)          # inclusive on both ends
         clear_end = end
     else:
@@ -768,6 +800,13 @@ def disassemble_at(
     # ── 5. Clear existing code units so the disassembler gets a clean slate ───
     print(f"[*] Clearing code units from {start} to {clear_end}")
     listing.clearCodeUnits(start, clear_end, True)
+
+    if try_thumb:
+        from java.math import BigInteger
+        context = prog.getProgramContext()
+        tmode = context.getRegister("TMode")
+        if tmode is not None:
+            context.setValue(tmode, start, clear_end, BigInteger.ONE)
 
     # ── 6. First disassembly attempt ───────────────────────────────────────────
     success = _run_disassemble(prog, monitor, start, restrict, follow_flow,
@@ -787,7 +826,8 @@ def disassemble_at(
 
     thumb_end = start.add(clear_len - 1)
     print(f"[*] Setting TMode=1 (Thumb) from {start} to {thumb_end}")
-    ctx.setValue(tmode, start, thumb_end, 1)
+    from java.math import BigInteger
+    ctx.setValue(tmode, start, thumb_end, BigInteger.ONE)
 
     # Clear again after context change to remove any partial ARM decoding
     listing.clearCodeUnits(start, clear_end, True)
@@ -797,69 +837,91 @@ def disassemble_at(
     return success
 
 
-# 运行 Ghidra 分析器
-def run_ghidra_base_address_solver(bin_file: str, variant: str, ghidra_workspace_dir: str, reversed_bytes: int = 4, manually_disassemble: tuple[int] = (0, 0)):
-    with pyghidra.open_program(binary_path=bin_file, language=LanguageID(variant).getIdAsString(), project_location=ghidra_workspace_dir) as flat_api:
-        print("###"*25)
-        print("### 成功启动 Ghidra 并加载二进制文件")
-        print(f"### 二进制文件路径：{bin_file}")
-        print(f"### 架构变体：{variant}")
-        if manually_disassemble != (0, 0):
-            ok = disassemble_at(
-                flat_api=flat_api, 
-                start_offset=manually_disassemble[0], 
-                end_offset=manually_disassemble[1], 
-                follow_flow=True,
-                try_thumb=True if variant.upper().startswith("ARM") else False
-            )
-            print("disassemble ok:", ok)
-        print("###"*25)
-        # 在这里使用 flat_api 进行操作
-        # 基地址分析
-        print("\n[开始分析固件基地址]")
-        baa = BaseAddressAnalyzer(flat_api.getCurrentProgram())
-        base_addr = baa.analyzing()
-        print("###"*25)
-        if base_addr is None:
-            print("[-] 无法分析固件基地址")
-        else:
-            print(f"### 基地址：0x{base_addr:x}")
-        print("###"*25)
-        del baa
-        # 分析程序入口地址
-        print("\n[开始分析程序入口地址]")
-        pea = ProgramEPAnalyzer(flat_api.getCurrentProgram())
-        ep = pea.analyzing()
-        print("###"*25)
-        print("### 成功分析程序入口地址")
-        print(f"### 入口地址：0x{ep:x}")
-        print(f"### 入口地址信息：{pea.all_ep_info[ep]}")
-        print("###"*25)
-        del pea
-        print("[分析完成]\n")
+def parse_disassembly_range(value):
+    try:
+        pair = ast.literal_eval(value)
+        if (not isinstance(pair, (tuple, list)) or len(pair) != 2
+                or any(type(n) is not int for n in pair)
+                or not 0 <= pair[0] <= pair[1]):
+            raise ValueError
+        return tuple(pair)
+    except (ValueError, SyntaxError, TypeError):
+        raise argparse.ArgumentTypeError("Expected (start, end) with 0 <= start <= end") from None
+
+
+def run_ghidra_base_address_solver(bin_file, variant, ghidra_workspace_dir,
+                                   reversed_bytes=None, manually_disassemble=(0, 0),
+                                   *, install_dir=None, llm_agent=None):
+    import pyghidra
+    import hashlib
+
+    bin_file = Path(bin_file).expanduser().resolve(strict=True)
+    if bin_file.stat().st_size == 0:
+        raise ValueError("The input binary is empty")
+    start_ghidra(install_dir)
+    workspace = Path(ghidra_workspace_dir).expanduser().resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    # Isolate imports by content and language to avoid stale projects/variants.
+    digest = hashlib.sha256(bin_file.read_bytes() + variant.encode()).hexdigest()[:16]
+    with pyghidra.open_program(
+        binary_path=bin_file, language=variant, project_location=workspace,
+        project_name=f"base_{digest}", analyze=False,
+        loader="ghidra.app.util.opinion.BinaryLoader",
+    ) as flat_api:
+        program = flat_api.getCurrentProgram()
+        transaction = program.startTransaction("Prepare firmware analysis")
+        prepared = False
+        try:
+            if manually_disassemble != (0, 0):
+                if not disassemble_at(flat_api, *manually_disassemble,
+                                      try_thumb="Cortex" in variant):
+                    raise ValueError("Manual disassembly failed; check the requested file offsets")
+                start = program.getMemory().locateAddressesForFileOffset(manually_disassemble[0])[0]
+                if program.getFunctionManager().getFunctionAt(start) is None:
+                    flat_api.createFunction(start, None)
+            flat_api.analyzeAll(program)
+            prepared = True
+        finally:
+            program.endTransaction(transaction, prepared)
+        print(f"### Binary: {bin_file} | Language: {variant}")
+        analyzer = BaseAddressAnalyzer(program, llm_agent, reversed_bytes)
+        base = analyzer.analyzing()
+        ep_analyzer = ProgramEPAnalyzer(program)
+        entry = ep_analyzer.analyzing()
+        if base is not None and "Cortex" in variant:
+            # Prefer the architectural reset vector over a call-graph heuristic.
+            reset = analyzer.vector_abs_addresses.get(analyzer.data_reversed_bytes)
+            if reset is not None and 0 <= reset - base < analyzer.FILE_SIZE:
+                entry = reset - base
+        print(f"### Base address: {hex(base) if base is not None else 'unknown'}")
+        # Ghidra imports raw bytes at zero: entry is a file offset until rebased.
+        print(f"### Entry offset: {hex(entry) if entry is not None else 'unknown'}")
+        if entry is not None and base is not None:
+            print(f"### Entry address: {hex(base + entry)}")
+        return {"base_address": base, "entry_offset": entry}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Infer firmware base address and entry offset with Ghidra")
+    parser.add_argument("--bin_file", "-b", required=True, help="raw binary path")
+    parser.add_argument("--variant", "-v", required=True, help="Ghidra language ID")
+    parser.add_argument("--reversed_bytes", "-r", type=int, choices=(2, 4, 8), help="pointer byte width (default: language pointer size)")
+    parser.add_argument("--manually_disassemble", "-m", type=parse_disassembly_range, default=(0, 0), help="file-offset range, e.g. '(0x365c, 0x368f)'")
+    parser.add_argument("--ghidra-dir", help="Ghidra distribution root (or GHIDRA_INSTALL_DIR)")
+    parser.add_argument("--workspace", default=os.environ.get("FBFISA_GHIDRA_WORKSPACE", str(Path(tempfile.gettempdir()) / "fbfisa-ghidra")), help="Ghidra project directory")
+    parser.add_argument("--llm-config", type=Path, help="INI file with [llm] configuration")
+    parser.add_argument("--no-llm", action="store_true", help="use static evidence only; no API requests")
+    args = parser.parse_args(argv)
+    try:
+        agent = None if args.no_llm else LLMAgent(args.llm_config)
+        run_ghidra_base_address_solver(
+            args.bin_file, args.variant, args.workspace, args.reversed_bytes,
+            args.manually_disassemble, install_dir=args.ghidra_dir, llm_agent=agent,
+        )
+    except (OSError, ValueError) as exc:
+        parser.exit(1, f"solve-base: {exc}\n")
+    return 0
+
 
 if __name__ == "__main__":
-    # 调试
-    # samples = [
-    #     (f"{FILE_DIR}/arm/bin/p2im_gateway_0x8000000.bin", "ARM:LE:32:Cortex", 4, (0x365c, 0x368f)),
-    #     (f"{FILE_DIR}/powerpc/bin/0a2818b49cc0d364dc897328cc0d6e38_0x0.bin", "PowerPC:BE:32:default", 4, (0x0, 0x0)),
-    #     (f"{FILE_DIR}/mips/bin/0a890b8cfbfc4ec85d27cdb84e1924c5_0x0.bin", "MIPS:BE:32:default", 4, (0x0, 0x0)),
-    #     (f"{FILE_DIR}/tricore/bin/ASCLIN_Shell_UART_1_KIT_TC297_TFT_0x60000000.bin", "tricore:LE:32:default", 4, (0x0, 0x0)),
-    # ]
-
-    import argparse
-    parser = argparse.ArgumentParser(description="Run Ghidra base address solver")
-    parser.add_argument("--bin_file", "-b", type=str, required=True, help="Path to the binary file")
-    parser.add_argument("--variant", "-v", type=str, required=True, help="Architecture variant")
-    parser.add_argument("--reversed_bytes", "-r", type=int, default=4, help="Number of reversed bytes")
-    parser.add_argument("--manually_disassemble", "-m", type=str, default="(0, 0)", help="Manually disassemble range (start, end)")
-    args = parser.parse_args()
-
-    run_ghidra_base_address_solver(
-        bin_file=args.bin_file, 
-        variant=args.variant, 
-        reversed_bytes=args.reversed_bytes, 
-        manually_disassemble=eval(args.manually_disassemble),
-        ghidra_workspace_dir=TEMP_GHIDRA_DIR
-    )
-
+    raise SystemExit(main())

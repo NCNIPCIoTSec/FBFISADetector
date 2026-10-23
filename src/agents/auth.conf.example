@@ -1,0 +1,6 @@
+[llm]
+api_key = YOUR_API_KEY
+model = YOUR_MODEL_NAME
+base_url = https://api.openai.com/v1
+# chat: Chat Completions; responses: Responses API
+api_style = chat

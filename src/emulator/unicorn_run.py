@@ -9,10 +9,16 @@ import unicorn
 from unicorn import Uc, UC_MODE_LITTLE_ENDIAN, UC_MODE_BIG_ENDIAN
 from unicorn.unicorn_const import UC_HOOK_CODE, UC_HOOK_MEM_INVALID, UC_HOOK_INTR
 
-from emu_initiators.initiator import InitiatorInterface
-from emu_initiators.arm_initiator import ARMInitiator, arm_vector_read
-from hook_funcs import mem_hook, code_hook
-from utils.calc import align_down, align_up
+if __package__:
+    from .emu_initiators.initiator import InitiatorInterface
+    from .emu_initiators.arm_initiator import ARMInitiator, arm_vector_read
+    from .hook_funcs import mem_hook, code_hook
+    from .utils.calc import align_down, align_up
+else:  # Support the historical: cd src/emulator && python unicorn_run.py
+    from emu_initiators.initiator import InitiatorInterface
+    from emu_initiators.arm_initiator import ARMInitiator, arm_vector_read
+    from hook_funcs import mem_hook, code_hook
+    from utils.calc import align_down, align_up
 
 
 # 主函数初始化UNICORN并运行
@@ -56,7 +62,10 @@ def main(bin_path: str, arch: str, endian: str, entry_addr: int):
         uc = Uc(unicorn.UC_ARCH_TRICORE, mode)
     else:
         raise ValueError(f"Unsupported architecture: {arch}")
-    initiator.println_initInfo()
+    if initiator is not None:
+        initiator.println_initInfo()
+    else:
+        print(f"[info] arch={arch}:{endian}")
         
     # ====== 映射 Flash 并加载固件 ======
     uc.mem_map(BASE_ADDR, flash_size)
@@ -83,11 +92,17 @@ def main(bin_path: str, arch: str, endian: str, entry_addr: int):
     except Exception as e:
         print(f"[error] emu_start exception: {e}")
 
-    initiator.println_crash(state)
+    if initiator is not None:
+        initiator.println_crash(state)
+    else:
+        print("[done] insn=%d" % state["count"])
 
 
 if __name__ == "__main__":
-    from settings import FLASH_MAP_PAD, ENTRY_ADDR, SRAM_BASE, SRAM_SIZE, MMIO_BASE, MMIO_SIZE, STACK_TOP
+    if __package__:
+        from .settings import FLASH_MAP_PAD, ENTRY_ADDR, SRAM_BASE, SRAM_SIZE, MMIO_BASE, MMIO_SIZE, STACK_TOP
+    else:
+        from settings import FLASH_MAP_PAD, ENTRY_ADDR, SRAM_BASE, SRAM_SIZE, MMIO_BASE, MMIO_SIZE, STACK_TOP
 
     # ====== 解析命令行参数 ======
     praser = argparse.ArgumentParser(description="Run Unicorn Emulator")
@@ -108,7 +123,8 @@ if __name__ == "__main__":
 
     # ====== 默认内存布局（你可按固件实际改）======
     # 从配置文件中读取内存布局
-    with open("config/arch_mem_layout.json", "r") as f:
+    config_path = os.path.join(os.path.dirname(__file__), "config", "arch_mem_layout.json")
+    with open(config_path, "r", encoding="utf-8") as f:
         mem_layout = json.load(f)
     # 从配置文件中读取默认内存布局
     default_layout = mem_layout[ARCH]

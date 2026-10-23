@@ -1,5 +1,6 @@
 /.history
 /.vscode
+/.venv
 /.idea
 /.agents
 /.codex
@@ -14,6 +15,7 @@
 
 /temp
 /logs
+/tests
 
 /output/arm
 /output/mips
@@ -23,3 +25,5 @@
 /output/x86
 
 **/*.log
+/*.in
+/*.toml

@@ -1,31 +1,39 @@
+"""Runtime paths and architecture configuration."""
+
+from __future__ import annotations
+
 import os
-import importlib.resources
+from pathlib import Path
 
-# 兼容开发模式（直接运行）和安装模式（包导入）
-def get_config_dir():
-    try:
-        # 安装模式：从config包获取绝对路径
-        with importlib.resources.files("fbfisa.config") as config_path:
-            return str(config_path.absolute())
-    except (ImportError, FileNotFoundError):
-        # 开发模式：使用相对路径
-        return os.path.join(os.path.dirname(__file__), "config/")
 
-def get_resource_dir(subdir):
-    """获取resources/输出目录（开发模式）"""
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, subdir)
+PACKAGE_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = PACKAGE_DIR / "config"
 
-# 路径配置（修改后）
-CONFIG_DIR = get_config_dir()  # 优先用包资源路径，兼容开发模式
-SAMPLES_DIR = get_resource_dir("resources/samples/")  # 开发模式的资源目录
-OUTPUT_DIR = get_resource_dir("output/")  # 开发模式的输出目录
+# Source checkouts contain resources next to the package. Installed wheels do
+# not, so use the caller's working directory as the default data root there.
+_SOURCE_ROOT = PACKAGE_DIR.parent.parent
+_DATA_ROOT = _SOURCE_ROOT if (_SOURCE_ROOT / "resources").is_dir() else Path.cwd()
 
-# 可选：确保输出目录存在
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+CONFIG_DIR = str(CONFIG_PATH)
+SAMPLES_DIR = os.environ.get(
+    "FBFISA_SAMPLES_DIR", str(_DATA_ROOT / "resources" / "samples")
+)
+OUTPUT_DIR = os.environ.get("FBFISA_OUTPUT_DIR", str(_DATA_ROOT / "output"))
 
-# 获取所有架构的配置文件路径信息
-ARCH_INFO = dict()
-for arch_file in os.listdir(os.path.join(CONFIG_DIR ,'arch')):
-    arch = arch_file.replace(".json", "")
-    ARCH_INFO[arch] = os.path.join(CONFIG_DIR, 'arch/'+arch_file)
+
+def _architecture_files() -> dict[str, str]:
+    arch_dir = CONFIG_PATH / "arch"
+    if not arch_dir.is_dir():
+        return {}
+    return {path.stem: str(path) for path in sorted(arch_dir.glob("*.json"))}
+
+
+ARCH_INFO = _architecture_files()
+
+
+def ensure_output_dir() -> Path:
+    """Create and return the configured output directory when needed."""
+
+    output = Path(OUTPUT_DIR)
+    output.mkdir(parents=True, exist_ok=True)
+    return output

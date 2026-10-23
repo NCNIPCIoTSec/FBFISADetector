@@ -1,5 +1,8 @@
 import struct
-from emu_initiators.initiator import InitiatorInterface
+try:
+    from .initiator import InitiatorInterface
+except ImportError:  # Support direct execution from src/emulator.
+    from emu_initiators.initiator import InitiatorInterface
 
 import unicorn
 from unicorn import Uc, UC_MODE_LITTLE_ENDIAN, UC_MODE_BIG_ENDIAN
@@ -11,11 +14,14 @@ from unicorn.arm_const import (
     UC_ARM_REG_R8, UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11, UC_ARM_REG_R12,
 )
 
-from settings import STACK_TOP
+try:
+    from ..settings import STACK_TOP
+except ImportError:  # Support direct execution from src/emulator.
+    from settings import STACK_TOP
 
 
 class ARMInitiator(InitiatorInterface):
-    def __init__(self, entry_addr: int, stack_top: int, mode: int, args: list = []):
+    def __init__(self, entry_addr: int, stack_top: int, mode: int, args: list = None):
         # 变量字符串，用于记录与打印信息
         self.complete_arch = None  # 架构信息
         self.entry_addr = entry_addr  # 入口地址PC
@@ -36,7 +42,7 @@ class ARMInitiator(InitiatorInterface):
         - output: mode - Unicorn 模式
         '''
         # 端序记录字符
-        endian = "LE" if mode & UC_MODE_LITTLE_ENDIAN else "BE"
+        endian = "BE" if mode & UC_MODE_BIG_ENDIAN else "LE"
         # ============ 向量表佐证 ============
         # 如果 chosen_entry 是奇数 => Thumb；偶数 => ARM（但 Cortex-M 基本都是 Thumb）
         is_thumb = (self.entry_addr & 1) == 1
@@ -52,20 +58,19 @@ class ARMInitiator(InitiatorInterface):
             mode = unicorn.UC_MODE_ARM | mode
         
         # 记录架构字符串
-        self.complete_arch = ("ARM" if is_thumb else "THUMB")+":"+endian
+        self.complete_arch = ("THUMB" if is_thumb else "ARM")+":"+endian
 
         return mode
 
     # 初始化寄存器
-    def reg_init(self, args: list = []):
+    def reg_init(self, args: list = None):
         '''
         初始化寄存器，需要根据具体架构配置相关寄存器
         - input: args - 可选参数列表，用于初始化寄存器
         - output: none
         '''
         # 初始化参数列表
-        if args is None:
-            args = []
+        args = list(args or [])
         if len(args) < 5:
             args.extend([0] * (5 - len(args)))
         # ====== 初始化寄存器 ======

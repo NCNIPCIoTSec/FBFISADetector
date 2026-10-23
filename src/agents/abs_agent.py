@@ -1,4 +1,5 @@
 import json
+import os
 import configparser
 import textwrap
 from pathlib import Path
@@ -34,7 +35,7 @@ class LLMAgent:
         )
     """
 
-    def __init__(self, conf_path: Path = _AUTH_CONF):
+    def __init__(self, conf_path: Path | None = None):
         self.cfg    = self._load_config(conf_path)
         self.client = OpenAI(
             api_key  = self.cfg["api_key"],
@@ -93,23 +94,13 @@ class LLMAgent:
                     unknown_result[offset] = abs_addr
                 continue
 
-            addr_map   = {f"0x{abs_addr:08X}": (offset, abs_addr) for offset, abs_addr in batch}
-            classified = set()
-
-            for key, label in result.items():
-                if key not in addr_map:
-                    continue
-                classified.add(key)
-                offset, abs_addr = addr_map[key]
+            for offset, abs_addr in batch:
+                label = result.get(f"0x{abs_addr:08X}", "unknown")
                 if label == "function":
                     func_result[offset] = abs_addr
                 elif label == "data":
                     data_result[offset] = abs_addr
                 else:
-                    unknown_result[offset] = abs_addr
-
-            for offset, abs_addr in batch:
-                if f"0x{abs_addr:08X}" not in classified:
                     unknown_result[offset] = abs_addr
 
         print(f"[LLMAgent] 完成 | "
@@ -147,7 +138,8 @@ class LLMAgent:
                 print(f"[LLMAgent] 批次 {idx} 失败，归入 unknown：{e}")
                 continue
 
-            final_results.update(result)
+            requested = {f"0x{addr:08X}" for addr, _ in batch}
+            final_results.update({key: value for key, value in result.items() if key in requested})
 
         return final_results
 
@@ -159,16 +151,18 @@ class LLMAgent:
     def _build_entries(self, batch: list, arch: str, file_bytes, file_size: int) -> list:
         entries = []
         for offset, abs_addr in batch:
-            real_addr = abs_addr & ~1
             is_thumb  = bool(abs_addr & 1) and arch.startswith("ARM")
             entries.append({
                 "abs_addr"  : f"0x{abs_addr:08X}",
+                "source_offset": f"0x{offset:X}",
                 "is_thumb"  : is_thumb,
-                "hex_bytes" : self._read_bytes(real_addr, _CTX_BYTES, file_bytes, file_size),
+                "hex_bytes" : self._read_bytes(offset, _CTX_BYTES, file_bytes, file_size),
             })
         return entries
 
     def _read_bytes(self, addr: int, n: int, file_bytes, file_size: int) -> str:
+        if addr < 0 or addr >= file_size:
+            return "<out-of-range>"
         # ── Ghidra FileBytes ────────────────────────────────────────────────
         if hasattr(file_bytes, "getOriginalByte"):
             try:
@@ -192,21 +186,21 @@ class LLMAgent:
     def _build_prompt(self, entries: list, arch: str, bits_width: int, endian: str) -> str:
         entry_lines = "\n".join(
             f'  abs_addr={e["abs_addr"]}  is_thumb={e["is_thumb"]}'
-            f'  target_bytes=[{e["hex_bytes"]}]'
+            f'  source_offset={e["source_offset"]}  source_bytes=[{e["hex_bytes"]}]'
             for e in entries
         )
         return textwrap.dedent(f"""
             你是嵌入式固件逆向专家。
             目标架构：{arch}  字宽：{bits_width}位  字节序：{endian}
 
-            任务：对以下每个候选绝对地址，根据目标位置的原始字节，
+            任务：对以下每个候选绝对地址，根据地址范围及引用位置的原始字节，
             判断其是「函数入口」(function)、「数据」(data) 或「无法判断」(unknown)。
 
             判断依据：
             1. function：字节符合该架构函数常见的函数地址范围
             2. data：字节符合该架构数据表常见的地址范围
             3. unknown：可能是字符串等数据的情
-            4. is_thumb=true 表示 Thumb 指针（低位已剥离，bytes 为真实地址字节）
+            4. is_thumb=true 表示 Thumb 指针；source_bytes 来自文件内引用位置，目标字节因基址未知而不可用
             5. 如果函数的地址范围于数据表地址范围有交叉，将此范围内的字节地址同时加入func和data分类
 
             候选地址：
@@ -248,8 +242,12 @@ class LLMAgent:
         style = self.cfg.get("api_style", "chat")
 
         if style == "responses":
-            # 仅原生 OpenAI 支持，中转站不支持
-            ...
+            response = self.client.responses.create(
+                model=self.cfg["model"], input=prompt,
+                instructions="你是嵌入式固件逆向专家，只输出 JSON，不附加任何说明。",
+                max_output_tokens=1024,
+            )
+            return (response.output_text or "").strip()
         else:
             # ← 走这里，标准 /chat/completions，所有中转站都支持
             response = self.client.chat.completions.create(
@@ -261,7 +259,7 @@ class LLMAgent:
                     {"role": "user",   "content": prompt},
                 ],
             )
-            return response.choices[0].message.content.strip()
+            return (response.choices[0].message.content or "").strip()
 
     def _parse(self, raw: str) -> dict:
         clean = raw.strip()
@@ -271,6 +269,8 @@ class LLMAgent:
                 if not l.strip().startswith("```")
             ).strip()
         parsed = json.loads(clean)
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected a JSON object of address labels")
         valid  = {"function", "data", "unknown"}
         result = {}
         for k, v in parsed.items():
@@ -290,6 +290,8 @@ class LLMAgent:
                 if not l.strip().startswith("```")
             ).strip()
         parsed = json.loads(clean)
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected a JSON object of address labels")
         valid  = {"flash", "ram", "other", "unknown"}
         result = {}
         for k, v in parsed.items():
@@ -303,18 +305,22 @@ class LLMAgent:
         return result
 
     @staticmethod
-    def _load_config(conf_path: Path) -> dict:
-        cfg = configparser.ConfigParser()
+    def _load_config(conf_path: Path | None = None) -> dict:
+        explicit = conf_path or os.environ.get("FBFISA_LLM_CONFIG")
+        conf_path = Path(explicit).expanduser() if explicit else _AUTH_CONF
+        if explicit and not conf_path.is_file():
+            raise ValueError(f"LLM config does not exist: {conf_path}")
+        cfg = configparser.ConfigParser(interpolation=None)
         cfg.read(conf_path, encoding="utf-8")
-        if "llm" not in cfg:
-            raise KeyError(f"auth.conf 缺少 [llm] 节：{conf_path}")
-        section = cfg["llm"]
-        for key in ("base_url", "api_key", "model"):
-            if key not in section:
-                raise KeyError(f"auth.conf [llm] 缺少字段：{key}")
-        return {
-            "base_url"  : section["base_url"].rstrip("/"),
-            "api_key"   : section["api_key"],
-            "model"     : section["model"],
-            "api_style" : section.get("api_style", "chat"),   # 默认 chat
+        section = cfg["llm"] if "llm" in cfg else {}
+        result = {
+            "base_url": os.environ.get("OPENAI_BASE_URL", section.get("base_url", "https://api.openai.com/v1")).rstrip("/"),
+            "api_key": os.environ.get("OPENAI_API_KEY", section.get("api_key", "")),
+            "model": os.environ.get("OPENAI_MODEL", section.get("model", "")),
+            "api_style": os.environ.get("OPENAI_API_STYLE", section.get("api_style", "chat")),
         }
+        if not result["api_key"] or not result["model"]:
+            raise ValueError("Set OPENAI_API_KEY and OPENAI_MODEL, provide --llm-config, or use --no-llm")
+        if result["api_style"] not in {"chat", "responses"}:
+            raise ValueError("LLM api_style must be chat or responses")
+        return result

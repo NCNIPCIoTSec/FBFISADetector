@@ -1,6 +1,9 @@
 from unicorn import Uc
 from unicorn.arm_const import UC_ARM_REG_PC
-from utils.calc import align_down, align_up
+try:
+    from ..utils.calc import align_down, align_up
+except ImportError:  # Support direct execution from src/emulator.
+    from utils.calc import align_down, align_up
 
 STOP_ON_INVALID = True       # 非法内存访问时停止
 

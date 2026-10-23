@@ -1,19 +1,19 @@
-WORKSPACE=$(pwd)
-SAMPLES_DIR=${WORKSPACE}/resources/samples
-ARM_ELF_SAMPLE_PATH=${SAMPLES_DIR}/arm/p2im_drone.elf
-OUTPUT_DIR=${WORKSPACE}/output/arm/bin/
-ARM_BIN_SAMPLE_PATH=${WORKSPACE}/output/arm/bin/p2im_drone_0x8000000.bin
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 测试 FBFISADetector
-cd ./src
-echo "RUN => src/detectisa.py"
-echo "[Test ARM Sample]"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${PYTHON:-}" ]]; then
+    if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+        PYTHON="$ROOT_DIR/.venv/bin/python"
+    else
+        PYTHON=python3
+    fi
+fi
+export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+SAMPLES_DIR="${FBFISA_SAMPLES_DIR:-$ROOT_DIR/resources/samples}"
+OUTPUT_DIR="${FBFISA_OUTPUT_DIR:-$ROOT_DIR/output}"
 
-echo "Execute => python detectisa.py -p -f ${ARM_ELF_SAMPLE_PATH}"
-python detectisa.py -p -f ${ARM_ELF_SAMPLE_PATH}
-
-echo "Execute => python detectisa.py -p -f ${ARM_BIN_SAMPLE_PATH}"
-python elf2bin.py -f ${ARM_ELF_SAMPLE_PATH} -o ${OUTPUT_DIR}
-python detectisa.py -p -f ${ARM_BIN_SAMPLE_PATH}
-
-
+sample="$SAMPLES_DIR/arm/p2im_drone.elf"
+"$PYTHON" -m detectisa -p -f "$sample" "$@"
+binary=$("$PYTHON" -m elf2bin -f "$sample" -o "$OUTPUT_DIR/arm/bin" --print-path)
+"$PYTHON" -m detectisa -p -f "$binary" "$@"

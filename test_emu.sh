@@ -1,16 +1,18 @@
-WORKSPACE=$(pwd)
-SAMPLES_DIR=${WORKSPACE}/resources/samples
-ARM_ELF_SAMPLE_PATH=${SAMPLES_DIR}/arm/p2im_gateway.elf
-OUTPUT_DIR=${WORKSPACE}/output/arm/bin/
-ARM_BIN_SAMPLE_PATH=${WORKSPACE}/output/arm/bin/p2im_gateway_0x8000000.bin
+#!/usr/bin/env bash
+set -euo pipefail
 
-cd ./src/
-python elf2bin.py -f ${ARM_ELF_SAMPLE_PATH} -o ${OUTPUT_DIR}
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${PYTHON:-}" ]]; then
+    if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+        PYTHON="$ROOT_DIR/.venv/bin/python"
+    else
+        PYTHON=python3
+    fi
+fi
+export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+SAMPLES_DIR="${FBFISA_SAMPLES_DIR:-$ROOT_DIR/resources/samples}"
+OUTPUT_DIR="${FBFISA_OUTPUT_DIR:-$ROOT_DIR/output}"
 
-cd ./emulator/
-python unicorn_run.py -f ${ARM_BIN_SAMPLE_PATH} -a ARM:LE -b 0x8000000 -e 0x0800365c
-# python ghidra_emu_run.py
-
-
-
-
+binary=$("$PYTHON" -m elf2bin -f "$SAMPLES_DIR/arm/p2im_gateway.elf" \
+    -o "$OUTPUT_DIR/arm/bin" --print-path)
+"$PYTHON" -m emulator.unicorn_run -f "$binary" -a ARM:LE -b 0x08000000 -e 0x0800365c "$@"
